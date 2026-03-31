@@ -139,6 +139,9 @@ async def battle_websocket(websocket: WebSocket, battle_id: int, user_id: int):
                             "data": {"winner_id": user_id, "reason": "solved"},
                         },
                     )
+
+                    await redis.delete(f"battle:{battle_id}:deadline")
+
                     asyncio.create_task(
                         notify_django_battle_finished(battle_id, user_id)
                     )

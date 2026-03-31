@@ -20,7 +20,7 @@ class BattleFinishSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         battle_id = attrs.pop("battle_id")
-        winner_id = attrs.pop("winner_id")
+        winner_id = attrs.pop("winner_id", None)
 
         try:
             battle = Battle.objects.get(id=battle_id)
@@ -34,6 +34,7 @@ class BattleFinishSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"User {winner_id} does not exist.")
 
         attrs["battle_instance"] = battle
+        attrs["winner_id"] = winner_id
 
         return attrs
 

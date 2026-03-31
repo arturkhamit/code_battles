@@ -1,6 +1,7 @@
 backend/.env
 fastapi_app/.env
 frontend/.env
+frontend/node_modules
 database/.env
 docker-compose.yml
 tester.py

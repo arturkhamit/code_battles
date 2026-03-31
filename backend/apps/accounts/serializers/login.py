@@ -1,9 +1,6 @@
-from django.contrib.auth import authenticate, get_user_model
-from django.db import transaction
+from django.contrib.auth import authenticate
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
-
-User = get_user_model()
 
 
 class LoginSerializer(serializers.Serializer):
@@ -18,9 +15,9 @@ class LoginSerializer(serializers.Serializer):
 
         refresh = RefreshToken.for_user(user)
 
-        with transaction.atomic():
-            user.is_active = True
-            user.save()
+        # TEMPORAIRLY:
+        refresh["username"] = user.username
+        refresh["email"] = user.email
 
         return {
             "refresh": str(refresh),

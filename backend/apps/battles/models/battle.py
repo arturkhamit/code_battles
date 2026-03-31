@@ -30,9 +30,7 @@ class Battle(models.Model):
     start_time = models.DateTimeField(blank=True, null=True)
     end_time = models.DateTimeField(blank=True, null=True)
     duration = models.FloatField(blank=True, null=True)
-    task = models.URLField(
-        default="https://www.meme-arsenal.com/memes/bc792386d4bf2ad344989e5ecbb9206f.jpg"
-    )
+    task = models.IntegerField()
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -55,4 +53,4 @@ class Battle(models.Model):
         verbose_name_plural = "Battles"
 
     def __str__(self):
-        return f"id -- {self.pk}\nstart -- {self.start_time}\nproblem -- {self.problem}"
+        return f"id -- {self.pk}\nstart -- {self.start_time}\nproblem -- {self.task}"

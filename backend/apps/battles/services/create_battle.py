@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from apps.battles.models import Battle, Participant
+from apps.battles.models import Battle
 
 ALLOWED_TYPES = {Battle.Type.DUEL}
 

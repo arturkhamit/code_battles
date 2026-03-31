@@ -1,5 +1,3 @@
-import re
-
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import serializers
@@ -26,13 +24,9 @@ class BattleCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"type": "Invalid battle type."})
 
         try:
-            task = str(attrs.get("task", ""))
-            url_regex = re.compile(r"^https?://\S+$", re.IGNORECASE)
-
-            if not bool(url_regex.match(task)):
-                raise serializers.ValidationError("Task must be a valid URL.")
+            int(attrs.get("task", ""))
         except Exception:
-            attrs["task"] = "Temp task"
+            raise serializers.ValidationError("Task must be a valid Integer.")
 
         return attrs
 
