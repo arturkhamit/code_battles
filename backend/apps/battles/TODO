@@ -1,0 +1,1 @@
+services/create_battle.py: add function to generate task automatically (if task is None)

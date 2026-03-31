@@ -1,0 +1,8 @@
+backend/.env
+fastapi_app/.env
+frontend/.env
+database/.env
+docker-compose.yml
+tester.py
+env/
+backend/tests/tests.json
