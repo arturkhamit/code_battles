@@ -29,6 +29,8 @@ async def execute_and_test_code(task_data: dict, language: str, user_code: str) 
 
         result = await run_in_docker(language, user_code, test_input)
 
+        user_output = result["output"].strip()
+
         if result["status"] == "error":
             return {
                 "status": "error",
@@ -36,8 +38,6 @@ async def execute_and_test_code(task_data: dict, language: str, user_code: str) 
                 "message": f"Error while testing #{idx + 1} case: {result['error']}",
                 "details": result["output"],
             }
-
-        user_output = result["output"].strip()
 
         if user_output != expected_output:
             return {

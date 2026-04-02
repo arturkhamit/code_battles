@@ -158,7 +158,10 @@ export const useBattle = (userId: number, username: string) => {
               type: "SET_SUBMIT_STATUS",
               status: { kind: "wrong", message: event.data.message },
             });
-            addLog(`Tests failed: ${event.data.message}`, "error");
+            addLog(
+              `Tests failed: ${event.data.message}\n${event.data.details}`,
+              "error",
+            );
           }
           break;
         }

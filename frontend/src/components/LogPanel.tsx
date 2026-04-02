@@ -1,24 +1,24 @@
-import { useEffect, useRef } from "react"
-import type { LogEntry } from "../types/battle"
+import { useEffect, useRef } from "react";
+import type { LogEntry } from "../types/battle";
 
 type LogPanelProps = {
-  logs: LogEntry[]
-}
+  logs: LogEntry[];
+};
 
 const logLevelClass: Record<LogEntry["level"], string> = {
   info: "text-ctp-subtext1",
   success: "text-ctp-green",
   error: "text-ctp-red",
   system: "text-ctp-yellow",
-}
+};
 
 export const LogPanel = ({ logs }: LogPanelProps) => {
-  const containerRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = containerRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [logs])
+    const el = containerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [logs]);
 
   return (
     <section
@@ -33,11 +33,14 @@ export const LogPanel = ({ logs }: LogPanelProps) => {
         aria-live="polite"
       >
         {logs.map((entry, i) => (
-          <div key={i} className={logLevelClass[entry.level]}>
+          <div
+            key={i}
+            className={`${logLevelClass[entry.level]} whitespace-pre-wrap`}
+          >
             [{entry.timestamp}] {entry.message}
           </div>
         ))}
       </div>
     </section>
-  )
-}
+  );
+};
