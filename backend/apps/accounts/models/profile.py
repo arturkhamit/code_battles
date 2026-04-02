@@ -13,9 +13,8 @@ class Profile(models.Model):
         null=True,
         default="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2c/Default_pfp.svg/250px-Default_pfp.svg.png",
     )
-
-    # TODO:
-    # add sum cool things
+    rating = models.IntegerField(null=True, default=1000)
+    preferred_language = models.CharField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Profile"

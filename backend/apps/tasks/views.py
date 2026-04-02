@@ -29,7 +29,7 @@ class TaskView(APIView):
         if not serializer.is_valid():
             return Response(
                 {
-                    "error": "Кривой формат JSON в этой задаче!",
+                    "error": "Bad JSON format!",
                     "details": serializer.errors,
                 },
                 status=status.HTTP_400_BAD_REQUEST,

@@ -1,25 +1,25 @@
-import { CodePanel } from "./CodePanel"
-import { Controls } from "./Controls"
-import { ErrorBanner } from "./ErrorBanner"
-import { Header } from "./Header"
-import { LogPanel } from "./LogPanel"
-import { TaskPanel } from "./TaskPanel"
-import { useBattle } from "../hooks/use-battle"
-import type { BattleType } from "../types/battle"
+import { CodePanel } from "./CodePanel";
+import { Controls } from "./Controls";
+import { ErrorBanner } from "./ErrorBanner";
+import { Header } from "./Header";
+import { LogPanel } from "./LogPanel";
+import { TaskPanel } from "./TaskPanel";
+import { useBattle } from "../hooks/use-battle";
+import type { BattleType } from "../types/battle";
 
 type BattleArenaProps = {
-  userId: number
-  username: string
-  onLogout: () => void
-}
+  userId: number;
+  username: string;
+  onLogout: () => void;
+};
 
 export const BattleArena = ({
   userId,
   username,
   onLogout,
 }: BattleArenaProps) => {
-  const battle = useBattle(userId)
-  const { state, taskInfo, timer, canShowStartButton, dispatch } = battle
+  const battle = useBattle(userId, username);
+  const { state, taskInfo, timer, canShowStartButton, dispatch } = battle;
 
   return (
     <div className="flex h-screen flex-col gap-3 p-5">
@@ -65,5 +65,5 @@ export const BattleArena = ({
         <LogPanel logs={state.logs} />
       </div>
     </div>
-  )
-}
+  );
+};

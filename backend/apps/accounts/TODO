@@ -1,3 +1,1 @@
-make route {/api/me} in order to get current user by token in his local storage
-
-model: add rating (maybe) and status (in menu/lobby, battling, etc.)
+model: adding some cool things to user profile :)

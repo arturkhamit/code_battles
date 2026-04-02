@@ -82,7 +82,7 @@ const reducer = (state: BattleState, action: Action): BattleState => {
   }
 };
 
-export const useBattle = (userId: number) => {
+export const useBattle = (userId: number, username: string) => {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [taskInfo, setTaskInfo] = useReducer(
     (_: TaskInfo | null, next: TaskInfo | null) => next,
@@ -133,7 +133,7 @@ export const useBattle = (userId: number) => {
             });
           } else {
             addLog(
-              `Battle finished! Winner: User ${event.data.winner_id}`,
+              `Battle finished! Winner: User ${event.data.winner_username}:${event.data.winner_id}`,
               "success",
             );
             dispatch({
@@ -164,17 +164,23 @@ export const useBattle = (userId: number) => {
         }
         case "opponent_running_code": {
           addLog(
-            `Opponent (User ${event.data.user_id}) is running code...`,
+            `User ${event.data.username}:${event.data.user_id} is running code...`,
             "system",
           );
           break;
         }
         case "user_joined": {
-          addLog(`User ${event.data.user_id} joined!`, "system");
+          addLog(
+            `User ${event.data.username}:${event.data.user_id} joined!`,
+            "system",
+          );
           break;
         }
         case "user_left": {
-          addLog(`User ${event.data.user_id} left.`, "error");
+          addLog(
+            `User ${event.data.username}:${event.data.user_id} left.`,
+            "error",
+          );
           break;
         }
         case "error": {
@@ -262,7 +268,7 @@ export const useBattle = (userId: number) => {
     addLog("Requesting server to create a new battle...", "system");
 
     const payload = {
-      task: state.taskId, // <-- Изменение здесь: передаем число вместо URL
+      task: state.taskId,
       creator: userId,
       type: state.battleType,
       ranked: false,
@@ -303,10 +309,11 @@ export const useBattle = (userId: number) => {
     dispatch({ type: "SET_BATTLE_ID", battleId });
     dispatch({ type: "SET_PHASE", phase: "lobby" });
 
-    ws.connect(battleId, userId);
+    ws.connect(battleId, userId, username);
     fetchTask(state.taskId);
   }, [
     userId,
+    username,
     state.taskId,
     state.duration,
     state.battleType,
@@ -336,9 +343,9 @@ export const useBattle = (userId: number) => {
 
     dispatch({ type: "SET_PHASE", phase: "lobby" });
     addLog(`Joining battle ${state.battleId}...`, "system");
-    ws.connect(state.battleId!, userId);
+    ws.connect(state.battleId!, userId, username);
     fetchTask(state.taskId);
-  }, [state.battleId, userId, state.taskId, addLog, ws, fetchTask]);
+  }, [state.battleId, userId, username, state.taskId, addLog, ws, fetchTask]);
 
   const handleStartBattle = useCallback(() => {
     if (phaseRef.current !== "lobby") return;

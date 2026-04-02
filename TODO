@@ -1,0 +1,1 @@
+rewrite ALL print() functions to logging into files.

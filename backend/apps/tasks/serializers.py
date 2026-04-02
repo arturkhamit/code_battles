@@ -11,9 +11,13 @@ class TestCasesSerializer(serializers.Serializer):
 
 
 class SolutionsSerializer(serializers.Serializer):
-    language = serializers.ListField(child=serializers.IntegerField(), allow_empty=True)
+    language = serializers.ListField(
+        child=serializers.IntegerField(),
+        allow_empty=True,
+    )
     solution = serializers.ListField(
-        child=serializers.CharField(allow_blank=True), allow_empty=True
+        child=serializers.CharField(allow_blank=True),
+        allow_empty=True,
     )
 
 
@@ -21,15 +25,15 @@ class TaskImportSerializer(serializers.Serializer):
     name = serializers.CharField()
     description = serializers.CharField()
 
-    public_tests = TestCasesSerializer()
-    private_tests = TestCasesSerializer()
-    generated_tests = TestCasesSerializer()
+    public_tests = TestCasesSerializer(required=False, allow_null=True)
+    private_tests = TestCasesSerializer(required=False, allow_null=True)
+    generated_tests = TestCasesSerializer(required=False, allow_null=True)
 
     source = serializers.IntegerField(required=False, allow_null=True)
     difficulty = serializers.IntegerField(required=False, allow_null=True)
 
-    solutions = SolutionsSerializer()
-    incorrect_solutions = SolutionsSerializer()
+    solutions = SolutionsSerializer(required=False, allow_null=True)
+    incorrect_solutions = SolutionsSerializer(required=False, allow_null=True)
 
     cf_contest_id = serializers.IntegerField(required=False, allow_null=True)
     cf_index = serializers.CharField(required=False, allow_blank=True)
@@ -52,7 +56,7 @@ class TaskImportSerializer(serializers.Serializer):
             tests = attrs.get(test_type)
             if tests and len(tests["input"]) != len(tests["output"]):
                 raise serializers.ValidationError(
-                    f"В {test_type} количество input ({len(tests['input'])}) "
-                    f"не совпадает с количеством output ({len(tests['output'])})."
+                    f"In {test_type} size of input ({len(tests['input'])}) "
+                    f"is not same as output ({len(tests['output'])})."
                 )
         return attrs

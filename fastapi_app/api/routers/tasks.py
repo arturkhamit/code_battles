@@ -11,7 +11,7 @@ async def get_task_info(task_id: int):
     task_data = await fetch_task_from_django(task_id)
 
     if not task_data:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail="Couldnt find the task")
 
     return {
         "id": task_id,
@@ -28,7 +28,7 @@ async def submit_code(task_id: int, submission: CodeSubmission):
     task_data = await fetch_task_from_django(task_id)
 
     if not task_data:
-        raise HTTPException(status_code=404, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail="Couldnt find the task")
 
     result = await execute_and_test_code(
         task_data=task_data, language=submission.language, user_code=submission.code
