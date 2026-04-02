@@ -1,17 +1,17 @@
-import type { BattlePhase } from "../types/battle"
-import type { TaskInfo } from "../types/task"
+import type { BattlePhase } from "../types/battle";
+import type { TaskInfo } from "../types/task";
 
 type TaskPanelProps = {
-  task: TaskInfo | null
-  phase: BattlePhase
-}
+  task: TaskInfo | null;
+  phase: BattlePhase;
+};
 
 export const TaskPanel = ({ task, phase }: TaskPanelProps) => {
   if (!task) {
     const message =
       phase === "idle"
         ? "Connect to a battle to see a task"
-        : "Loading task..."
+        : "Loading task...";
 
     return (
       <section
@@ -23,11 +23,11 @@ export const TaskPanel = ({ task, phase }: TaskPanelProps) => {
         </h2>
         <p className="mt-2 text-sm text-ctp-subtext0">{message}</p>
       </section>
-    )
+    );
   }
 
-  const inputs = task.public_tests?.input ?? []
-  const outputs = task.public_tests?.output ?? []
+  const inputs = task.public_tests?.input ?? [];
+  const outputs = task.public_tests?.output ?? [];
 
   return (
     <section
@@ -38,7 +38,7 @@ export const TaskPanel = ({ task, phase }: TaskPanelProps) => {
       <p className="mt-2 whitespace-pre-wrap text-sm">{task.description}</p>
       {task.time_limit && (
         <p className="mt-2 text-xs text-ctp-subtext1">
-          Time limit: {task.time_limit} sec.
+          Time limit: {task.time_limit.seconds} sec.
         </p>
       )}
 
@@ -72,5 +72,5 @@ export const TaskPanel = ({ task, phase }: TaskPanelProps) => {
         <p className="mt-4 text-xs text-ctp-subtext0">No public tests</p>
       )}
     </section>
-  )
-}
+  );
+};

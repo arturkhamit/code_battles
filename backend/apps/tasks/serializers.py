@@ -40,7 +40,9 @@ class TaskImportSerializer(serializers.Serializer):
     cf_points = serializers.FloatField(required=False, allow_null=True)
     cf_rating = serializers.IntegerField(required=False, allow_null=True)
     cf_tags = serializers.ListField(
-        child=serializers.CharField(), required=False, allow_empty=True
+        child=serializers.CharField(allow_blank=True),
+        required=False,
+        allow_empty=True,
     )
 
     is_description_translated = serializers.BooleanField(default=False)
