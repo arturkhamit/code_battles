@@ -4,12 +4,17 @@ import base64
 import docker
 import requests
 
-from .limits import MAX_CPU_CORES, MAX_RAM_MB, TIMEOUT_SECONDS
-
 client = docker.from_env()
 
 
-def _run_container_sync(language: str, code: str, stdin_data: str = "") -> dict:
+def _run_container_sync(
+    language: str,
+    code: str,
+    stdin_data: str,
+    timeout_sec: float,
+    mem_limit_bytes: int,
+    cpu_cores: float = 0.5,
+) -> dict:
     if language != "python":
         return {
             "status": "error",
@@ -32,14 +37,14 @@ def _run_container_sync(language: str, code: str, stdin_data: str = "") -> dict:
         container = client.containers.run(
             image,
             command=command,
-            mem_limit=f"{MAX_RAM_MB}m",
-            nano_cpus=int(MAX_CPU_CORES * 1e9),
+            mem_limit=mem_limit_bytes,
+            nano_cpus=int(cpu_cores * 1e9),
             network_disabled=True,
             detach=True,
             environment={"PYTHONUNBUFFERED": "1"},
         )
 
-        result = container.wait(timeout=TIMEOUT_SECONDS)
+        result = container.wait(timeout=timeout_sec)
         logs = container.logs().decode("utf-8").strip()
 
         if result["StatusCode"] == 0:
@@ -53,7 +58,7 @@ def _run_container_sync(language: str, code: str, stdin_data: str = "") -> dict:
         return {
             "status": "error",
             "output": None,
-            "error": f"Time Limit Exceeded ({TIMEOUT_SECONDS}s)",
+            "error": f"Time Limit Exceeded ({timeout_sec}s)",
         }
     except Exception as e:
         return {"status": "error", "output": None, "error": f"Engine Error: {str(e)}"}
@@ -65,5 +70,24 @@ def _run_container_sync(language: str, code: str, stdin_data: str = "") -> dict:
                 pass
 
 
-async def run_in_docker(language: str, code: str, stdin_data: str = "") -> dict:
-    return await asyncio.to_thread(_run_container_sync, language, code, stdin_data)
+async def run_in_docker(
+    language: str,
+    code: str,
+    task_time_limit: dict,
+    task_memory_limit_bytes: int,
+    stdin_data: str = "",
+    cpu_cores: float = 0.5,  # hard-coded, because in tasks this parameter is not defined
+) -> dict:
+    seconds = task_time_limit.get("seconds", 0)
+    nanos = task_time_limit.get("nanos", 0)
+    timeout_sec = float(seconds + (nanos / 1_000_000_000.0))
+
+    return await asyncio.to_thread(
+        _run_container_sync,
+        language,
+        code,
+        stdin_data,
+        timeout_sec,
+        task_memory_limit_bytes,
+        cpu_cores,
+    )

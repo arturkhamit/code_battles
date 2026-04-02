@@ -26,8 +26,16 @@ async def execute_and_test_code(task_data: dict, language: str, user_code: str) 
     for idx, test in enumerate(tests):
         test_input = test["input"]
         expected_output = test["output"].strip()
+        time_limit = test["time_limit"]
+        memory_limit = test["memory_limit_bytes"]
 
-        result = await run_in_docker(language, user_code, test_input)
+        result = await run_in_docker(
+            language=language,
+            code=user_code,
+            task_time_limit=time_limit,
+            task_memory_limit_bytes=memory_limit,
+            stdin_data=test_input,
+        )
 
         user_output = result["output"].strip()
 
