@@ -1,4 +1,1 @@
-docker_runner.py: rewrite usage of limits for docker (json with task already has these written)
-
-
-add support of any other language than python
+fix problem for code written in c++ that won't run

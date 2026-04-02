@@ -74,7 +74,7 @@ async def battle_websocket(
                 current_deadline = await redis.get(f"battle:{battle_id}:deadline")
                 current_count = len(manager.active_battles.get(battle_id, {}))
 
-                if not current_deadline and current_count >= 2:
+                if not current_deadline and current_count >= 1:
                     start_data = await notify_django_battle_started(battle_id, user_id)
 
                     if start_data and "deadline" in start_data:

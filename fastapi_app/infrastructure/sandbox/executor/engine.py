@@ -1,8 +1,9 @@
 import asyncio
-import base64
 
 import docker
 import requests
+
+from .registry import LanguageRegistry
 
 client = docker.from_env()
 
@@ -15,28 +16,20 @@ def _run_container_sync(
     mem_limit_bytes: int,
     cpu_cores: float = 0.5,
 ) -> dict:
-    if language != "python":
+    strategy = LanguageRegistry.get_strategy(language)
+
+    if not strategy:
         return {
             "status": "error",
             "output": None,
             "error": f"Language {language} is not supported",
         }
 
-    image = "python:3.11-alpine"
-
-    encoded_code = base64.b64encode(code.encode("utf-8")).decode("utf-8")
-    encoded_stdin = base64.b64encode(stdin_data.encode("utf-8")).decode("utf-8")
-
-    command = (
-        f"sh -c \"echo '{encoded_stdin}' | base64 -d | "
-        f"python -c \\\"import base64; exec(base64.b64decode('{encoded_code}').decode('utf-8'))\\\"\""
-    )
-
     container = None
     try:
         container = client.containers.run(
-            image,
-            command=command,
+            strategy.image,
+            command=strategy.build_command(code, stdin_data),
             mem_limit=mem_limit_bytes,
             nano_cpus=int(cpu_cores * 1e9),
             network_disabled=True,
@@ -50,7 +43,11 @@ def _run_container_sync(
         if result["StatusCode"] == 0:
             return {"status": "success", "output": logs, "error": None}
         else:
-            return {"status": "error", "output": logs, "error": "Runtime Error"}
+            return {
+                "status": "error",
+                "output": logs,
+                "error": "Runtime Error / Compilation Error",
+            }
 
     except requests.exceptions.ReadTimeout:
         if container:
@@ -73,14 +70,21 @@ def _run_container_sync(
 async def run_in_docker(
     language: str,
     code: str,
-    task_time_limit: dict,
-    task_memory_limit_bytes: int,
+    task_time_limit: dict | None = None,
+    task_memory_limit_bytes: int | None = None,
     stdin_data: str = "",
-    cpu_cores: float = 0.5,  # hard-coded, because in tasks this parameter is not defined
+    cpu_cores: float = 0.5,
 ) -> dict:
-    seconds = task_time_limit.get("seconds", 0)
-    nanos = task_time_limit.get("nanos", 0)
-    timeout_sec = float(seconds + (nanos / 1_000_000_000.0))
+    if task_time_limit:
+        seconds = task_time_limit.get("seconds", 0)
+        nanos = task_time_limit.get("nanos", 0)
+        timeout_sec = float(seconds + (nanos / 1_000_000_000.0))
+    else:
+        timeout_sec = 5.0
+
+    mem_limit = (
+        task_memory_limit_bytes if task_memory_limit_bytes else 128 * 1024 * 1024
+    )
 
     return await asyncio.to_thread(
         _run_container_sync,
@@ -88,6 +92,6 @@ async def run_in_docker(
         code,
         stdin_data,
         timeout_sec,
-        task_memory_limit_bytes,
+        mem_limit,
         cpu_cores,
     )

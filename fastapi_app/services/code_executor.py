@@ -1,4 +1,4 @@
-from infrastructure.sandbox.docker_runner import run_in_docker
+from infrastructure.sandbox.executor import run_in_docker
 
 
 async def execute_and_test_code(task_data: dict, language: str, user_code: str) -> dict:
@@ -26,8 +26,8 @@ async def execute_and_test_code(task_data: dict, language: str, user_code: str) 
     for idx, test in enumerate(tests):
         test_input = test["input"]
         expected_output = test["output"].strip()
-        time_limit = test["time_limit"]
-        memory_limit = test["memory_limit_bytes"]
+        time_limit = test.get("time_limit", None)
+        memory_limit = test.get("memory_limit_bytes", None)
 
         result = await run_in_docker(
             language=language,

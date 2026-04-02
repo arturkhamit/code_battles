@@ -386,7 +386,7 @@ export const useBattle = (userId: number, username: string) => {
     () =>
       state.phase === "lobby" &&
       state.battleType === "1v1" &&
-      state.participantsCount >= 2,
+      state.participantsCount >= 1,
     [state.phase, state.battleType, state.participantsCount],
   );
 
