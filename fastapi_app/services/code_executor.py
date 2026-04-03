@@ -2,57 +2,64 @@ from infrastructure.sandbox.executor import run_in_docker
 
 
 async def execute_and_test_code(task_data: dict, language: str, user_code: str) -> dict:
-    tests = []
+    stdin_data = []
+    expected_outputs = []
 
-    if "public_tests" in task_data:
-        inputs = task_data["public_tests"].get("input", [])
-        outputs = task_data["public_tests"].get("output", [])
-        for i in range(len(inputs)):
-            tests.append({"input": inputs[i], "output": outputs[i]})
+    for test_group in ["public_tests", "generated_tests"]:
+        if test_group in task_data:
+            inputs = task_data[test_group].get("input", [])
+            outputs = task_data[test_group].get("output", [])
+            for inp, out in zip(inputs, outputs):
+                stdin_data.append(inp)
+                expected_outputs.append(out.strip())
 
-    if "generated_tests" in task_data:
-        inputs = task_data["generated_tests"].get("input", [])
-        outputs = task_data["generated_tests"].get("output", [])
-        for i in range(len(inputs)):
-            tests.append({"input": inputs[i], "output": outputs[i]})
-
-    if not tests:
+    if not stdin_data:
         return {
             "status": "error",
             "is_correct": False,
             "message": "Task doesn't have test cases",
         }
 
-    for idx, test in enumerate(tests):
-        test_input = test["input"]
-        expected_output = test["output"].strip()
-        time_limit = test.get("time_limit", None)
-        memory_limit = test.get("memory_limit_bytes", None)
+    time_limit = task_data.get("time_limit")
+    memory_limit = task_data.get("memory_limit_bytes")
 
-        result = await run_in_docker(
-            language=language,
-            code=user_code,
-            task_time_limit=time_limit,
-            task_memory_limit_bytes=memory_limit,
-            stdin_data=test_input,
-        )
+    result = await run_in_docker(
+        language=language,
+        code=user_code,
+        stdin_data=stdin_data,
+        task_time_limit=time_limit,
+        task_memory_limit_bytes=memory_limit,
+    )
 
-        user_output = result["output"].strip()
+    if result["status"] != "success":
+        return {
+            "status": "error",
+            "is_correct": False,
+            "message": "Execution Error",
+            "details": result.get("error", "Unknown error occurred"),
+        }
 
-        if result["status"] == "error":
-            return {
-                "status": "error",
-                "is_correct": False,
-                "message": f"Error while testing #{idx + 1} case: {result['error']}",
-                "details": result["output"],
-            }
+    user_outputs = result.get("outputs", [])
 
-        if user_output != expected_output:
+    for idx, expected in enumerate(expected_outputs):
+        test_input = stdin_data[idx]
+
+        if idx >= len(user_outputs):
             return {
                 "status": "failed",
                 "is_correct": False,
-                "message": f"Incorrect answer on test case: {idx + 1}",
-                "details": f"Input:\n{test_input}\n\nExpected:\n{expected_output}\n\nOutput:\n{user_output}",
+                "message": f"Program crashed or terminated early on test case #{idx + 1}",
+                "details": f"Input:\n{test_input}\n\nExpected:\n{expected}\n\nOutput:\n[No output]",
+            }
+
+        user_out = user_outputs[idx]
+
+        if user_out != expected:
+            return {
+                "status": "failed",
+                "is_correct": False,
+                "message": f"Incorrect answer on test case #{idx + 1}",
+                "details": f"Input:\n{test_input}\n\nExpected:\n{expected}\n\nOutput:\n{user_out}",
             }
 
     return {

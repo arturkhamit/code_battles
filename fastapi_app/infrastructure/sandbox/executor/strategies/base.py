@@ -8,7 +8,12 @@ class LanguageStrategy(ABC):
         """Returns name of a Docker image"""
         pass
 
+    @property
+    def time_buffer(self) -> float:
+        """time to initialize a container"""
+        return 0.5
+
     @abstractmethod
-    def build_command(self, code: str, stdin_data: str) -> str:
+    def build_command(self, code: str, stdin_data: list[str]) -> str:
         """generating shell command for launching code inside a container"""
         pass

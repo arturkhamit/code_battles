@@ -1,0 +1,32 @@
+fix this output:
+
+
+
+[1:06:01 PM] Tests failed: Incorrect answer on test case #1
+Input:
+3
+((()))
+(())()
+()(()
+
+Expected:
+YES
+YES
+NO
+
+Output:
+File "//script.py", line 2
+    using namespace std;
+          ^^^^^^^^^
+SyntaxError: invalid syntax
+  File "//script.py", line 2
+    using namespace std;
+          ^^^^^^^^^
+SyntaxError: invalid syntax
+  File "//script.py", line 2
+    using namespace std;
+          ^^^^^^^^^
+SyntaxError: invalid syntax
+  File "//script.py", line 2
+    using namespace std;
+          ^^^^^^^^^ .............

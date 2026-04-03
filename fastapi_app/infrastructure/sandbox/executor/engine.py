@@ -11,8 +11,8 @@ client = docker.from_env()
 def _run_container_sync(
     language: str,
     code: str,
-    stdin_data: str,
-    timeout_sec: float,
+    stdin_data: list[str],
+    single_test_timeout: float,
     mem_limit_bytes: int,
     cpu_cores: float = 0.5,
 ) -> dict:
@@ -21,11 +21,13 @@ def _run_container_sync(
     if not strategy:
         return {
             "status": "error",
-            "output": None,
+            "outputs": [],
             "error": f"Language {language} is not supported",
         }
 
     container = None
+    total_timeout = (single_test_timeout * len(stdin_data)) + strategy.time_buffer
+
     try:
         container = client.containers.run(
             strategy.image,
@@ -37,16 +39,18 @@ def _run_container_sync(
             environment={"PYTHONUNBUFFERED": "1"},
         )
 
-        result = container.wait(timeout=timeout_sec)
+        result = container.wait(timeout=total_timeout)
         logs = container.logs().decode("utf-8").strip()
 
         if result["StatusCode"] == 0:
-            return {"status": "success", "output": logs, "error": None}
+            outputs = logs.split("|||SPLIT|||")[:-1]
+            outputs = [out.strip() for out in outputs]
+            return {"status": "success", "outputs": outputs, "error": None}
         else:
             return {
                 "status": "error",
-                "output": logs,
-                "error": "Runtime Error / Compilation Error",
+                "outputs": [],
+                "error": f"Runtime / Compilation Error:\n{logs}",
             }
 
     except requests.exceptions.ReadTimeout:
@@ -54,11 +58,11 @@ def _run_container_sync(
             container.kill()
         return {
             "status": "error",
-            "output": None,
-            "error": f"Time Limit Exceeded ({timeout_sec}s)",
+            "outputs": [],
+            "error": f"Time Limit Exceeded (Batch timeout: {total_timeout}s)",
         }
     except Exception as e:
-        return {"status": "error", "output": None, "error": f"Engine Error: {str(e)}"}
+        return {"status": "error", "outputs": [], "error": f"Engine Error: {str(e)}"}
     finally:
         if container:
             try:
@@ -72,15 +76,15 @@ async def run_in_docker(
     code: str,
     task_time_limit: dict | None = None,
     task_memory_limit_bytes: int | None = None,
-    stdin_data: str = "",
+    stdin_data: list[str] = [""],
     cpu_cores: float = 0.5,
 ) -> dict:
     if task_time_limit:
         seconds = task_time_limit.get("seconds", 0)
         nanos = task_time_limit.get("nanos", 0)
-        timeout_sec = float(seconds + (nanos / 1_000_000_000.0))
+        single_test_timeout = float(seconds + (nanos / 1_000_000_000.0))
     else:
-        timeout_sec = 5.0
+        single_test_timeout = 1.0
 
     mem_limit = (
         task_memory_limit_bytes if task_memory_limit_bytes else 128 * 1024 * 1024
@@ -91,7 +95,7 @@ async def run_in_docker(
         language,
         code,
         stdin_data,
-        timeout_sec,
+        single_test_timeout,
         mem_limit,
         cpu_cores,
     )

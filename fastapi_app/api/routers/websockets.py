@@ -104,7 +104,7 @@ async def battle_websocket(
                     )
                     continue
 
-                language = data.get("language", "python")
+                language = data.get("language")
                 code = data.get("code", "")
                 task_id = data.get("task_id")
 
