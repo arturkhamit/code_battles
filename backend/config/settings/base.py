@@ -37,7 +37,6 @@ INSTALLED_APPS = [
     # local apps:
     "apps.accounts",
     "apps.battles",
-    "apps.submissions",
     "apps.ratings",
     "apps.tasks",
 ]
