@@ -21,11 +21,14 @@ def notify_battle_created(battle_id: int, creator_id: int, invite_code: int):
     )
 
 
-def notify_battle_joined(battle_id: int, participant_id: int, participants: list):
+def notify_battle_joined(
+    battle_id: int, task_id: int, participant_id: int, participants: list
+):
     publish_event(
         "battle_joined",
         {
             "battle_id": battle_id,
+            "task_id": task_id,
             "participant": participant_id,
             "participants": participants,
         },

@@ -1,6 +1,8 @@
+fix in websockets when task_id is None.
+
+
+
 fix this output:
-
-
 
 [1:06:01 PM] Tests failed: Incorrect answer on test case #1
 Input:

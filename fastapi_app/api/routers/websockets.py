@@ -46,15 +46,10 @@ async def battle_websocket(
     redis = await get_redis()
 
     asyncio.create_task(notify_django_user_joined(battle_id, user_id))
+
     await manager.broadcast(
         battle_id,
         {"event": "user_joined", "data": {"user_id": user_id, "username": username}},
-    )
-
-    participants_count = len(manager.active_battles.get(battle_id, {}))
-    await manager.broadcast(
-        battle_id,
-        {"event": "lobby_update", "data": {"participants_count": participants_count}},
     )
 
     deadline = await redis.get(f"battle:{battle_id}:deadline")

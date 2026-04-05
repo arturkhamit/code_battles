@@ -10,7 +10,10 @@ export type WsClientMessage =
 export type WsServerEvent =
   | { event: "user_joined"; data: { user_id: number; username: string } }
   | { event: "user_left"; data: { user_id: number; username: string } }
-  | { event: "lobby_update"; data: { participants_count: number } }
+  | {
+      event: "lobby_update";
+      data: { participants_count: number; task_id?: number };
+    }
   | { event: "battle_started"; data: { deadline: number } }
   | {
       event: "opponent_running_code";

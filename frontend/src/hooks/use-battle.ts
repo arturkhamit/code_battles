@@ -89,11 +89,6 @@ export const useBattle = (userId: number, username: string) => {
     null,
   );
 
-  const phaseRef = useRef(state.phase);
-  phaseRef.current = state.phase;
-
-  const timer = useTimer();
-
   const addLog = useCallback(
     (message: string, level: LogEntry["level"] = "info") => {
       dispatch({
@@ -104,6 +99,26 @@ export const useBattle = (userId: number, username: string) => {
     [],
   );
 
+  const fetchTask = useCallback(
+    async (taskId: number) => {
+      const result = await safeFetch<TaskInfo>(
+        `${CONFIG.FASTAPI_URL}/api/tasks/${taskId}/info`,
+      );
+      if (result.ok) {
+        setTaskInfo(result.data);
+      } else {
+        addLog(`Failed to load task: ${result.error.message}`, "error");
+        setTaskInfo(null);
+      }
+    },
+    [addLog],
+  );
+
+  const phaseRef = useRef(state.phase);
+  phaseRef.current = state.phase;
+
+  const timer = useTimer();
+
   const handleWsEvent = useCallback(
     (event: WsServerEvent) => {
       switch (event.event) {
@@ -112,6 +127,13 @@ export const useBattle = (userId: number, username: string) => {
             type: "SET_PARTICIPANTS",
             count: event.data.participants_count,
           });
+          if (
+            "task_id" in event.data &&
+            typeof event.data.task_id === "number"
+          ) {
+            dispatch({ type: "SET_TASK_ID", taskId: event.data.task_id });
+            fetchTask(event.data.task_id);
+          }
           break;
         }
         case "battle_started": {
@@ -202,7 +224,7 @@ export const useBattle = (userId: number, username: string) => {
         }
       }
     },
-    [addLog, timer],
+    [addLog, timer, fetchTask],
   );
 
   const ws = useWebSocket({
@@ -225,21 +247,6 @@ export const useBattle = (userId: number, username: string) => {
     },
     shouldReconnect: () => phaseRef.current === "active",
   });
-
-  const fetchTask = useCallback(
-    async (taskId: number) => {
-      const result = await safeFetch<TaskInfo>(
-        `${CONFIG.FASTAPI_URL}/api/tasks/${taskId}/info`,
-      );
-      if (result.ok) {
-        setTaskInfo(result.data);
-      } else {
-        addLog(`Failed to load task: ${result.error.message}`, "error");
-        setTaskInfo(null);
-      }
-    },
-    [addLog],
-  );
 
   const handleCreate = useCallback(async () => {
     dispatch({ type: "SET_ERROR", error: null });
@@ -347,8 +354,7 @@ export const useBattle = (userId: number, username: string) => {
     dispatch({ type: "SET_PHASE", phase: "lobby" });
     addLog(`Joining battle ${state.battleId}...`, "system");
     ws.connect(state.battleId!, userId, username);
-    fetchTask(state.taskId);
-  }, [state.battleId, userId, username, state.taskId, addLog, ws, fetchTask]);
+  }, [state.battleId, userId, username, addLog, ws]);
 
   const handleStartBattle = useCallback(() => {
     if (phaseRef.current !== "lobby") return;

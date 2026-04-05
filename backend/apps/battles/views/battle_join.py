@@ -22,6 +22,7 @@ class BattleJoinView(APIView):
 
         notify_battle_joined(
             battle_id=battle_id,
+            task_id=battle.task,
             participant_id=participant.user.id,
             participants=list(
                 battle.participants.all().values_list("user_id", flat=True)

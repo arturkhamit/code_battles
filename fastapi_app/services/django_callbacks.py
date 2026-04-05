@@ -53,7 +53,7 @@ async def notify_django_battle_started(battle_id: int, user_id: int) -> dict | N
             return None
 
 
-async def notify_django_battle_finished(battle_id: int, winner_id: int):
+async def notify_django_battle_finished(battle_id: int, winner_id: int | None):
     async with httpx.AsyncClient() as client:
         try:
             url = f"{settings.DJANGO_API_URL}/battles/finish/{battle_id}/"
