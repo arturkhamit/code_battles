@@ -73,3 +73,5 @@ xxhash==3.6.0
 yarl==1.23.0
 zope.event==6.1
 zope.interface==8.2
+
+pytest

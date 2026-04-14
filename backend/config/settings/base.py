@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "apps.battles",
     "apps.ratings",
     "apps.tasks",
+    "apps.submissions",
 ]
 
 REST_FRAMEWORK = {

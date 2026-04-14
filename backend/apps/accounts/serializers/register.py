@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
+from apps.accounts.models.services.create_profile import create_profile
+
 User = get_user_model()
 
 
@@ -54,4 +56,5 @@ class RegisterSerializer(serializers.ModelSerializer):
         validated_data.pop("password2")
 
         user = User.objects.create_user(password=password, **validated_data)
+        profile = create_profile(user_id=user.id)
         return user

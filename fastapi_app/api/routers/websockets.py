@@ -100,7 +100,7 @@ async def battle_websocket(
                     continue
 
                 language = data.get("language")
-                code = data.get("code", "")
+                code = data.get("code", None)
                 task_id = data.get("task_id")
 
                 await manager.broadcast(

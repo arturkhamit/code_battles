@@ -1,8 +1,6 @@
 from django.conf import settings
 from django.db import models
 
-from .participant import Participant
-
 
 class Battle(models.Model):
     class Status(models.TextChoices):
@@ -31,6 +29,7 @@ class Battle(models.Model):
     end_time = models.DateTimeField(blank=True, null=True)
     duration = models.FloatField(blank=True, null=True)
     task = models.IntegerField()
+    max_participants = models.IntegerField()
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

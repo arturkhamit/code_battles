@@ -1,22 +1,9 @@
-fix in websockets when task_id is None.
+make that redis will store information about pending battles, and deleting them after some time of inactivity
 
 
 
 fix this output:
 
-[1:06:01 PM] Tests failed: Incorrect answer on test case #1
-Input:
-3
-((()))
-(())()
-()(()
-
-Expected:
-YES
-YES
-NO
-
-Output:
 File "//script.py", line 2
     using namespace std;
           ^^^^^^^^^
@@ -31,4 +18,7 @@ SyntaxError: invalid syntax
 SyntaxError: invalid syntax
   File "//script.py", line 2
     using namespace std;
-          ^^^^^^^^^ .............
+          ^^^^^^^^^ .......................
+
+
+for production rewrite functionality of storing active battles (right now it's stored as a local dict in battle_engine.py)

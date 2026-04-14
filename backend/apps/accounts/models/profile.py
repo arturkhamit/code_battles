@@ -9,9 +9,7 @@ class Profile(models.Model):
         related_name="profile",
     )
     avatar = models.URLField(
-        blank=True,
-        null=True,
-        default="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2c/Default_pfp.svg/250px-Default_pfp.svg.png",
+        default="https://gogle.com/svg.png",
     )
     rating = models.IntegerField(null=True, default=1000)
     preferred_language = models.CharField(null=True, blank=True)

@@ -24,6 +24,7 @@ class BattleJoinView(APIView):
             battle_id=battle_id,
             task_id=battle.task,
             participant_id=participant.user.id,
+            max_members=battle.max_members,
             participants=list(
                 battle.participants.all().values_list("user_id", flat=True)
             ),
