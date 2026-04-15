@@ -1,7 +1,12 @@
+import logging
+import secrets
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.battles.models import Battle
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_TYPES = {Battle.Type.DUEL}
 
@@ -19,7 +24,8 @@ def create_battle(creator, *, ranked, type, duration, task, max_participants):
 
     if not creator:
         raise ValidationError("User not found")
-    invite_code = _generate_invite_code()
+
+    invite_code = secrets.token_urlsafe(4)
 
     with transaction.atomic():
         battle = Battle.objects.create(
@@ -30,14 +36,11 @@ def create_battle(creator, *, ranked, type, duration, task, max_participants):
             status=Battle.Status.PENDING,
             invite_code=invite_code,
             ranked=ranked,
-            max_participants=max_participants
-            # is_private=is_private,
+            max_participants=max_participants,
         )
 
+    logger.info(
+        "Battle %d created by user %d (type=%s, duration=%s, task=%s)",
+        battle.pk, creator.pk, type, duration, task,
+    )
     return battle
-
-
-def _generate_invite_code():
-    import secrets
-
-    return secrets.token_urlsafe(4)  # length == 6

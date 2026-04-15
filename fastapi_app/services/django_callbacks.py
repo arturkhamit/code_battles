@@ -1,5 +1,9 @@
+import logging
+
 import httpx
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 async def notify_django_user_joined(battle_id: int, user_id: int):
@@ -11,11 +15,11 @@ async def notify_django_user_joined(battle_id: int, user_id: int):
 
             response = await client.patch(url, json=payload, headers=headers)
             if response.status_code == 200:
-                print(f"Django notified: User {user_id} joined battle {battle_id}")
+                logger.info("Django notified: User %d joined battle %d", user_id, battle_id)
             else:
-                print(f"Error notifying Django (join): {response.text}")
+                logger.error("Error notifying Django (join): %s", response.text)
         except Exception as e:
-            print(f"HTTP error (join): {e}")
+            logger.exception("HTTP error (join): %s", e)
 
 
 async def notify_django_user_left(battle_id: int, user_id: int):
@@ -27,23 +31,9 @@ async def notify_django_user_left(battle_id: int, user_id: int):
 
             response = await client.patch(url, json=payload, headers=headers)
             if response.status_code == 200:
-                print(f"Django notified: User {user_id} left battle {battle_id}")
+                logger.info("Django notified: User %d left battle %d", user_id, battle_id)
         except Exception as e:
-            print(f"HTTP error (leave): {e}")
-
-async def notify_django_delete_battle(battle_id: int):
-    async with httpx.AsyncClient() as client:
-        try:
-            url = f"{settings.DJANGO_API_URL}/battles/delete/{battle_id}/"
-            headers = {"Authorization": f"Bearer {settings.SECRET_KEY}"}
-
-            response = await client.delete(url, headers=headers)
-            if response.status_code == 204:
-                print(f"Django deleted idle battle {battle_id}")
-            else:
-                print(f"Error deleting battle in Django: {response.text}")
-        except Exception as e:
-            print(f"HTTP error (delete): {e}")
+            logger.exception("HTTP error (leave): %s", e)
 
 
 async def notify_django_battle_started(battle_id: int, user_id: int) -> dict | None:
@@ -57,13 +47,13 @@ async def notify_django_battle_started(battle_id: int, user_id: int) -> dict | N
 
             if response.status_code == 200:
                 data = response.json()
-                print(f"Battle {battle_id} started! Deadline: {data.get('deadline')}")
+                logger.info("Battle %d started. Deadline: %s", battle_id, data.get("deadline"))
                 return data
             else:
-                print(f"Error starting battle in Django: {response.text}")
+                logger.error("Error starting battle in Django: %s", response.text)
                 return None
         except Exception as e:
-            print(f"HTTP error (start): {e}")
+            logger.exception("HTTP error (start): %s", e)
             return None
 
 
@@ -77,9 +67,24 @@ async def notify_django_battle_finished(battle_id: int, winner_id: int | None):
 
             response = await client.patch(url, json=payload, headers=headers)
             response.raise_for_status()
-            print(f"Django successfully updated: Battle {battle_id} finished")
+            logger.info("Django successfully updated: Battle %d finished", battle_id)
         except Exception as e:
-            print(f"Error sending status to Django: {e}")
+            logger.exception("Error sending finish status to Django: %s", e)
+
+
+async def notify_django_delete_battle(battle_id: int):
+    async with httpx.AsyncClient() as client:
+        try:
+            url = f"{settings.DJANGO_API_URL}/battles/delete/{battle_id}/"
+            headers = {"Authorization": f"Bearer {settings.SECRET_KEY}"}
+
+            response = await client.delete(url, headers=headers)
+            if response.status_code == 204:
+                logger.info("Django deleted idle battle %d", battle_id)
+            else:
+                logger.error("Error deleting battle in Django: %s", response.text)
+        except Exception as e:
+            logger.exception("HTTP error (delete): %s", e)
 
 
 async def fetch_task_from_django(task_id: int) -> dict | None:
@@ -93,11 +98,13 @@ async def fetch_task_from_django(task_id: int) -> dict | None:
             if response.status_code == 200:
                 return response.json()
             else:
-                print(
-                    f"Error while getting task from Django: {response.status_code} - {response.text}"
+                logger.error(
+                    "Error fetching task from Django: %d - %s",
+                    response.status_code,
+                    response.text,
                 )
                 return None
 
         except Exception as e:
-            print(f"FastAPI can't reach Django: {e}")
+            logger.exception("FastAPI can't reach Django: %s", e)
             return None

@@ -2,6 +2,10 @@ import asyncio
 import logging
 import re
 
+from core.logging_config import setup_logging
+
+setup_logging()
+
 from api.internal import callbacks
 from api.routers import tasks, websockets
 from fastapi import FastAPI

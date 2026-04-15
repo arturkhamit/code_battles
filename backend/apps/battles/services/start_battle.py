@@ -1,8 +1,12 @@
+import logging
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from apps.battles.models import Battle, Participant
+
+logger = logging.getLogger(__name__)
 
 
 def start_battle(user, *, battle):
@@ -22,4 +26,5 @@ def start_battle(user, *, battle):
             participant.status = Participant.Status.PLAYING
             participant.save()
 
+    logger.info("Battle %d started by user %d", battle.pk, user.pk)
     return battle

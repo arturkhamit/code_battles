@@ -1,6 +1,9 @@
 import json
+import logging
 
 from infrastructure.redis.client import redis_client
+
+logger = logging.getLogger(__name__)
 
 
 def _channel(battle_id: int) -> str:
@@ -8,7 +11,9 @@ def _channel(battle_id: int) -> str:
 
 
 def publish_event(battle_id: int, event: dict):
-    redis_client.publish(_channel(battle_id), json.dumps(event))
+    channel = _channel(battle_id)
+    redis_client.publish(channel, json.dumps(event))
+    logger.debug("Published event to %s: %s", channel, event.get("event"))
 
 
 def notify_battle_created(battle_id: int, creator_id: int, invite_code: int):

@@ -1,7 +1,11 @@
+import logging
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.battles.models import Battle, Participant
+
+logger = logging.getLogger(__name__)
 
 
 def leave_battle(user, *, battle):
@@ -13,6 +17,7 @@ def leave_battle(user, *, battle):
             else:
                 raise ValidationError("User is not a participant of this battle")
 
+        logger.info("User %d left battle %d", user.pk, battle.pk)
         return participant
 
     except Battle.DoesNotExist:
@@ -20,4 +25,5 @@ def leave_battle(user, *, battle):
     except ValidationError:
         raise
     except Exception as e:
+        logger.exception("Unexpected error leaving battle %d: %s", battle.pk, e)
         raise ValidationError(f"Unknown error: {e}") from e
