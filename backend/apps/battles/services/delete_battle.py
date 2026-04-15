@@ -1,6 +1,6 @@
 import logging
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from apps.battles.models import Battle
 
@@ -17,7 +17,10 @@ def delete_battle(battle):
 
     with transaction.atomic():
         battle.participants.all().delete()
-        battle.delete()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM battles_battle WHERE id = %s", [battle.pk]
+            )
 
     logger.info("Idle battle %d deleted", battle.pk)
     return True
