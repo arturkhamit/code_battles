@@ -15,7 +15,7 @@ async def notify_django_user_joined(battle_id: int, user_id: int):
 
             response = await client.patch(url, json=payload, headers=headers)
             if response.status_code == 200:
-                logger.info("Django notified: User %d joined battle %d", user_id, battle_id)
+                logger.info("Django notified: User %d joined battle %d", int(user_id), battle_id)
             else:
                 logger.error("Error notifying Django (join): %s", response.text)
         except Exception as e:
@@ -31,7 +31,7 @@ async def notify_django_user_left(battle_id: int, user_id: int):
 
             response = await client.patch(url, json=payload, headers=headers)
             if response.status_code == 200:
-                logger.info("Django notified: User %d left battle %d", user_id, battle_id)
+                logger.info("Django notified: User %d left battle %d", int(user_id), int(battle_id))
         except Exception as e:
             logger.exception("HTTP error (leave): %s", e)
 

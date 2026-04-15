@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def join_battle(user, *, battle):
     role = Participant.Role.PLAYER
     try:
-        if battle.type == "1v1" and battle.participants.count() >= battle.max_participants:
+        if battle.participants.count() >= battle.max_participants:
             raise ValidationError("Battle is full")
         if battle.status == "active":
             role = Participant.Role.SPECTATOR

@@ -97,6 +97,20 @@ async def battle_websocket(
                         asyncio.create_task(
                             watch_battle_timeout(battle_id, new_deadline)
                         )
+            elif action == "send_chat":
+                text = (data.get("message") or "")[:500].strip()
+                if text:
+                    await manager.publish(
+                        battle_id,
+                        {
+                            "event": "chat_message",
+                            "data": {
+                                "user_id": user_id,
+                                "username": username,
+                                "message": text,
+                            },
+                        },
+                    )
 
             elif action == "submit_code":
                 is_finished = await redis.get(f"battle:{battle_id}:finished")

@@ -21,6 +21,7 @@ type Action =
   | { type: "SET_TASK_ID"; taskId: number }
   | { type: "SET_BATTLE_TYPE"; battleType: BattleType }
   | { type: "SET_DURATION"; duration: number }
+  | { type: "SET_MAX_PARTICIPANTS"; maxParticipants: number }
   | { type: "SET_DEADLINE"; deadline: number | null }
   | { type: "SET_PARTICIPANTS"; count: number }
   | { type: "SET_SUBMIT_STATUS"; status: SubmitStatus }
@@ -34,6 +35,7 @@ const initialState: BattleState = {
   taskId: 1,
   battleType: "1v1",
   duration: 15,
+  maxParticipants: 2,
   deadline: null,
   participantsCount: 0,
   submitStatus: { kind: "none" },
@@ -59,6 +61,8 @@ const reducer = (state: BattleState, action: Action): BattleState => {
       return { ...state, battleType: action.battleType };
     case "SET_DURATION":
       return { ...state, duration: action.duration };
+    case "SET_MAX_PARTICIPANTS":
+      return { ...state, maxParticipants: action.maxParticipants };
     case "SET_DEADLINE":
       return { ...state, deadline: action.deadline };
     case "SET_PARTICIPANTS":
@@ -75,6 +79,7 @@ const reducer = (state: BattleState, action: Action): BattleState => {
         taskId: state.taskId,
         battleType: state.battleType,
         duration: state.duration,
+        maxParticipants: state.maxParticipants,
         logs: state.logs,
       };
     default:
@@ -208,6 +213,10 @@ export const useBattle = (userId: number, username: string) => {
           );
           break;
         }
+        case "chat_message": {
+          addLog(`${event.data.username}: ${event.data.message}`, "chat")
+          break
+        }
         case "error": {
           addLog(`Server error: ${event.data.message}`, "error");
           dispatch({
@@ -282,7 +291,7 @@ export const useBattle = (userId: number, username: string) => {
       type: state.battleType,
       ranked: false,
       duration: state.duration,
-      max_participants: 2,
+      max_participants: state.battleType === "1v1" ? 2 : state.maxParticipants,
     };
 
     const result = await authFetch<{ id?: number; battle_id?: number }>(
@@ -376,6 +385,17 @@ export const useBattle = (userId: number, username: string) => {
     [addLog, ws, state.taskId],
   );
 
+  const handleSendChat = useCallback(
+    (message: string) => {
+      const phase = phaseRef.current
+      if (phase !== "lobby" && phase !== "active") return
+      const trimmed = message.trim()
+      if (!trimmed) return
+      ws.send({ action: "send_chat", message: trimmed })
+    },
+    [ws],
+  )
+
   const handleDisconnect = useCallback(() => {
     ws.disconnect();
     timer.reset();
@@ -387,13 +407,11 @@ export const useBattle = (userId: number, username: string) => {
     dispatch({ type: "SET_ERROR", error: null });
   }, []);
 
-  const canShowStartButton = useMemo(
-    () =>
-      state.phase === "lobby" &&
-      state.battleType === "1v1" &&
-      state.participantsCount >= 1,
-    [state.phase, state.battleType, state.participantsCount],
-  );
+  const canShowStartButton = useMemo(() => {
+    if (state.phase !== "lobby") return false
+    if (state.battleType === "1v1") return state.participantsCount >= 1
+    return state.participantsCount >= 2
+  }, [state.phase, state.battleType, state.participantsCount]);
 
   return {
     state,
@@ -405,6 +423,7 @@ export const useBattle = (userId: number, username: string) => {
     handleJoin,
     handleStartBattle,
     handleSubmitCode,
+    handleSendChat,
     handleDisconnect,
     clearError,
   };

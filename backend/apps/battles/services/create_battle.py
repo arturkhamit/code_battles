@@ -8,7 +8,7 @@ from apps.battles.models import Battle
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_TYPES = {Battle.Type.DUEL}
+ALLOWED_TYPES = {Battle.Type.DUEL, Battle.Type.GROUP}
 
 
 def create_battle(creator, *, ranked, type, duration, task, max_participants):
@@ -25,6 +25,8 @@ def create_battle(creator, *, ranked, type, duration, task, max_participants):
     if not creator:
         raise ValidationError("User not found")
 
+    if type == Battle.Type.GROUP and max_participants <= 2:
+        raise ValidationError("Group battles require at least 2 participants")
     invite_code = secrets.token_urlsafe(4)
 
     with transaction.atomic():

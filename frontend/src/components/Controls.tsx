@@ -6,12 +6,14 @@ type ControlsProps = {
   taskId: number
   battleType: BattleType
   duration: number
+  maxParticipants: number
   battleId: number | null
   canShowStart: boolean
   fieldErrors?: Record<string, string[]>
   onTaskIdChange: (v: number) => void
   onBattleTypeChange: (v: BattleType) => void
   onDurationChange: (v: number) => void
+  onMaxParticipantsChange: (v: number) => void
   onBattleIdChange: (v: number) => void
   onCreate: () => void
   onJoin: () => void
@@ -41,12 +43,14 @@ export const Controls = ({
   taskId,
   battleType,
   duration,
+  maxParticipants,
   battleId,
   canShowStart,
   fieldErrors,
   onTaskIdChange,
   onBattleTypeChange,
   onDurationChange,
+  onMaxParticipantsChange,
   onBattleIdChange,
   onCreate,
   onJoin,
@@ -109,6 +113,22 @@ export const Controls = ({
           min={1}
         />
       </label>
+
+      {battleType === "group" && (
+        <label className="flex items-center gap-1.5 text-sm">
+          Max Players:
+          <input
+            type="number"
+            value={maxParticipants}
+            onChange={(e) => onMaxParticipantsChange(Number(e.target.value))}
+            disabled={isConnected || isBusy}
+            className={inputClass(hasFieldError(fieldErrors, "max_participants"))}
+            aria-label="Maximum number of players"
+            min={2}
+            max={50}
+          />
+        </label>
+      )}
 
       <div className="h-7 w-px bg-ctp-surface1" />
 

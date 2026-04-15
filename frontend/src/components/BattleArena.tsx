@@ -31,6 +31,7 @@ export const BattleArena = ({
         taskId={state.taskId}
         battleType={state.battleType}
         duration={state.duration}
+        maxParticipants={state.maxParticipants}
         battleId={state.battleId}
         canShowStart={canShowStartButton}
         fieldErrors={state.error?.fieldErrors}
@@ -40,6 +41,9 @@ export const BattleArena = ({
         }
         onDurationChange={(v) =>
           dispatch({ type: "SET_DURATION", duration: v })
+        }
+        onMaxParticipantsChange={(v) =>
+          dispatch({ type: "SET_MAX_PARTICIPANTS", maxParticipants: v })
         }
         onBattleIdChange={(v) =>
           dispatch({ type: "SET_BATTLE_ID", battleId: v || null })
@@ -62,7 +66,11 @@ export const BattleArena = ({
           submitStatus={state.submitStatus}
           onSubmit={battle.handleSubmitCode}
         />
-        <LogPanel logs={state.logs} />
+        <LogPanel
+          logs={state.logs}
+          phase={state.phase}
+          onSendChat={battle.handleSendChat}
+        />
       </div>
     </div>
   );

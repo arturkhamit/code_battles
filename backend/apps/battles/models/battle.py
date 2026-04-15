@@ -11,7 +11,7 @@ class Battle(models.Model):
 
     class Type(models.TextChoices):
         DUEL = "1v1"
-        # add sumtin (important)
+        GROUP = "group"
 
     status = models.CharField(
         max_length=20,

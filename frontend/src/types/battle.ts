@@ -20,7 +20,7 @@ export type SubmitStatus =
 export type LogEntry = {
   timestamp: string
   message: string
-  level: "info" | "success" | "error" | "system"
+  level: "info" | "success" | "error" | "system" | "chat"
 }
 
 export type BattleState = {
@@ -29,6 +29,7 @@ export type BattleState = {
   taskId: number
   battleType: BattleType
   duration: number
+  maxParticipants: number
   deadline: number | null
   participantsCount: number
   submitStatus: SubmitStatus

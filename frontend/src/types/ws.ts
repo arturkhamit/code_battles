@@ -1,11 +1,12 @@
 export type WsClientMessage =
   | { action: "start_battle_request" }
   | {
-      action: "submit_code";
-      language: string;
-      code: string;
-      task_id: number;
-    };
+      action: "submit_code"
+      language: string
+      code: string
+      task_id: number
+    }
+  | { action: "send_chat"; message: string }
 
 export type WsServerEvent =
   | { event: "user_joined"; data: { user_id: number; username: string } }
@@ -36,4 +37,5 @@ export type WsServerEvent =
         reason: "solved" | "time_up";
       };
     }
-  | { event: "error"; data: { message: string } };
+  | { event: "chat_message"; data: { user_id: number; username: string; message: string } }
+  | { event: "error"; data: { message: string } }
