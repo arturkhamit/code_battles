@@ -283,6 +283,7 @@ export const useBattle = (userId: number, username: string) => {
       type: state.battleType,
       ranked: false,
       duration: state.duration,
+      max_participants: 2, // hardcoded 
     };
 
     const result = await safeFetch<{ id?: number; battle_id?: number }>(

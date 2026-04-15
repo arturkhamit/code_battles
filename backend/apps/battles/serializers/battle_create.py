@@ -11,7 +11,7 @@ User = get_user_model()
 class BattleCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Battle
-        fields = ("id", "ranked", "type", "task", "creator", "duration", "max_members",)
+        fields = ("id", "ranked", "type", "task", "creator", "duration", "max_participants",)
         read_only_fields = ("id",)
 
     def validate(self, attrs):
@@ -19,8 +19,8 @@ class BattleCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"ranked": "Ranked must be a boolean value."}
             )
-        if int(attrs.get("max_members")) < 1:
-            raise serializers.ValidationError({"max_members": "Max members must be a positive integer."})
+        if int(attrs.get("max_participants")) < 1:
+            raise serializers.ValidationError({"max_participants": "Max members must be a positive integer."})
         if attrs.get("type") not in Battle.Type.values:
             raise serializers.ValidationError({"type": "Invalid battle type."})
 

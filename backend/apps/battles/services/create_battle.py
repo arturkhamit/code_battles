@@ -6,7 +6,7 @@ from apps.battles.models import Battle
 ALLOWED_TYPES = {Battle.Type.DUEL}
 
 
-def create_battle(creator, *, ranked, type, duration, task, max_members):
+def create_battle(creator, *, ranked, type, duration, task, max_participants):
 
     if type not in ALLOWED_TYPES:
         raise ValidationError("Unsupported battle type")
@@ -30,7 +30,7 @@ def create_battle(creator, *, ranked, type, duration, task, max_members):
             status=Battle.Status.PENDING,
             invite_code=invite_code,
             ranked=ranked,
-            max_members=max_members
+            max_participants=max_participants
             # is_private=is_private,
         )
 
