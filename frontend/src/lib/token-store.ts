@@ -39,7 +39,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
     if (!refresh) return null
 
     const result = await safeFetch<{ access: string }>(
-      ${CONFIG.DJANGO_URL}/api/internal/accounts/refresh/,
+      `${CONFIG.DJANGO_URL}/api/internal/accounts/refresh/`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -94,7 +94,7 @@ export const authFetch = async <T = unknown>(
   const authedOptions: RequestInit = {
     ...options,
     headers: mergeHeaders(options.headers, {
-      Authorization: Bearer ${access},
+      Authorization: `Bearer ${access}`,
       "Content-Type": "application/json",
     }),
   }
@@ -108,7 +108,7 @@ export const authFetch = async <T = unknown>(
     const retryOptions: RequestInit = {
       ...options,
       headers: mergeHeaders(options.headers, {
-        Authorization: Bearer ${newAccess},
+        Authorization: `Bearer ${newAccess}`,
         "Content-Type": "application/json",
       }),
     }
