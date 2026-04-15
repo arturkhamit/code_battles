@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useReducer, useRef } from "react";
 import { CONFIG } from "../config";
-import { safeFetch } from "../lib/api";
+import { authFetch } from "../lib/token-store";
 import type {
   ApiErrorState,
   BattlePhase,
@@ -101,7 +101,7 @@ export const useBattle = (userId: number, username: string) => {
 
   const fetchTask = useCallback(
     async (taskId: number) => {
-      const result = await safeFetch<TaskInfo>(
+      const result = await authFetch<TaskInfo>(
         `${CONFIG.FASTAPI_URL}/api/tasks/${taskId}/info`,
       );
       if (result.ok) {
@@ -279,18 +279,16 @@ export const useBattle = (userId: number, username: string) => {
 
     const payload = {
       task: state.taskId,
-      creator: userId,
       type: state.battleType,
       ranked: false,
       duration: state.duration,
-      max_participants: 2, // hardcoded 
+      max_participants: 2,
     };
 
-    const result = await safeFetch<{ id?: number; battle_id?: number }>(
+    const result = await authFetch<{ id?: number; battle_id?: number }>(
       `${CONFIG.DJANGO_URL}/api/internal/battles/create/`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       },
     );

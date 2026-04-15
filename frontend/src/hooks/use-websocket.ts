@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import { CONFIG } from "../config";
 import { safeParseJson } from "../lib/api";
+import { tokenStore } from "../lib/token-store"
 import type { WsClientMessage, WsServerEvent } from "../types/ws";
 
 type UseWebSocketOptions = {
@@ -40,7 +41,13 @@ export const useWebSocket = (options: UseWebSocketOptions) => {
         wsRef.current = null;
       }
 
-      const wsUrl = `${CONFIG.WS_URL}/ws/battle/${battleId}/${userId}?username=${encodeURIComponent(username)}`;
+      const token = tokenStore.getAccess()
+      if (!token) {
+        options.onError("Cannot connect: not authenticated")
+        return
+      }
+
+      const wsUrl = ${CONFIG.WS_URL}/ws/battle/${battleId}?token=${encodeURIComponent(token)};
 
       try {
         const socket = new WebSocket(wsUrl);

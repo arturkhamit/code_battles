@@ -1,19 +1,19 @@
 from infrastructure.messaging.battle_events import notify_battle_created
-from rest_framework import status
+from rest_framework import permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.battles.permissions import IsInternalService
 from apps.battles.serializers.battle_create import BattleCreateSerializer
 
 
 class BattleCreateView(APIView):
-    authentication_classes = []
-    permission_classes = [IsInternalService]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        data = request.data.copy()
+        data["creator"] = request.user.id
 
-        serializer = BattleCreateSerializer(data=request.data)
+        serializer = BattleCreateSerializer(data=data)
         serializer.is_valid(raise_exception=True)
         battle = serializer.save()
 

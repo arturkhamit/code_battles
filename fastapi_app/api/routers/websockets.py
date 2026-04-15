@@ -1,7 +1,9 @@
 import asyncio
 import time
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+
+from core.auth import get_current_user_ws
 from infrastructure.redis.client import get_redis
 from services.battle_engine import manager
 from services.code_executor import execute_and_test_code
@@ -38,10 +40,15 @@ async def watch_battle_timeout(battle_id: int, deadline: float):
         await notify_django_battle_finished(battle_id, None)
 
 
-@router.websocket("/ws/battle/{battle_id}/{user_id}")
+@router.websocket("/ws/battle/{battle_id}")
 async def battle_websocket(
-    websocket: WebSocket, battle_id: int, user_id: int, username: str
+    websocket: WebSocket,
+    battle_id: int,
+    current_user: dict = Depends(get_current_user_ws),
 ):
+    user_id: int = current_user["user_id"]
+    username: str = current_user["username"]
+
     await manager.connect(websocket, battle_id, user_id)
     redis = await get_redis()
 

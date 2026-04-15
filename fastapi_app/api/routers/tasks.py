@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from core.auth import get_current_user
 from schemas.submission import CodeSubmission
 from services.code_executor import execute_and_test_code
 from services.django_callbacks import fetch_task_from_django
@@ -7,7 +9,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
 @router.get("/{task_id}/info")
-async def get_task_info(task_id: int):
+async def get_task_info(task_id: int, _user: dict = Depends(get_current_user)):
     task_data = await fetch_task_from_django(task_id)
 
     if not task_data:
@@ -24,7 +26,11 @@ async def get_task_info(task_id: int):
 
 
 @router.post("/{task_id}/submit")
-async def submit_code(task_id: int, submission: CodeSubmission):
+async def submit_code(
+    task_id: int,
+    submission: CodeSubmission,
+    _user: dict = Depends(get_current_user),
+):
     task_data = await fetch_task_from_django(task_id)
 
     if not task_data:
