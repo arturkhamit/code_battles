@@ -6,7 +6,9 @@
       <sourceFolder url="file://$MODULE_DIR$/fastapi_app" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/frontend" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/redis_data" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/backend/config" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/env" />
+      <excludeFolder url="file://$MODULE_DIR$/frontend/.idea" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.12 (code_battles)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

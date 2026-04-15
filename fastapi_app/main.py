@@ -1,13 +1,17 @@
 import asyncio
-import json
 import logging
+import re
 
 from api.internal import callbacks
 from api.routers import tasks, websockets
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from infrastructure.redis.client import redis_client
-from services.battle_engine import manager
+from services.django_callbacks import notify_django_delete_battle
+
+logger = logging.getLogger(__name__)
+
+IDLE_KEY_PATTERN = re.compile(r"^battle:(\d+):idle_ttl$")
 
 app = FastAPI(title="Battle Engine FastAPI")
 app.add_middleware(
@@ -22,44 +26,44 @@ app.include_router(tasks.router, prefix="/api")
 app.include_router(websockets.router)
 
 
-async def redis_listener():
+async def idle_battle_listener():
     pubsub = redis_client.pubsub()
-    await pubsub.subscribe("battle_events")
+    await pubsub.subscribe("__keyevent@0__:expired")
 
     async for message in pubsub.listen():
-        if message["type"] == "message":
-            try:
-                payload = json.loads(message["data"])
+        if message["type"] != "message":
+            continue
 
-                if payload.get("type") == "battle_joined":
-                    event_data = payload.get("data", {})
+        expired_key = message["data"]
+        if not isinstance(expired_key, str):
+            expired_key = expired_key.decode()
 
-                    battle_id = event_data.get("battle_id")
-                    task_id = event_data.get("task_id")
-                    participants = event_data.get("participants", [])
-                    participants_count = len(participants)
+        match = IDLE_KEY_PATTERN.match(expired_key)
+        if not match:
+            continue
 
-                    if battle_id:
-                        await manager.broadcast(
-                            battle_id,
-                            {
-                                "event": "lobby_update",
-                                "data": {
-                                    "participants_count": participants_count,
-                                    "task_id": task_id,
-                                },
-                            },
-                        )
+        battle_id = int(match.group(1))
+        logger.info(f"Battle {battle_id} idle timer expired, requesting deletion")
 
-            except json.JSONDecodeError:
-                logging.error("Error while patsing JSON from Redis")
-            except Exception as e:
-                logging.error(f"Error while broadcasting: {e}")
+        try:
+            await notify_django_delete_battle(battle_id)
+        except Exception as exc:
+            logger.error(f"Failed to delete idle battle {battle_id}: {exc}")
+
+        for suffix in ("deadline", "finished"):
+            await redis_client.delete(f"battle:{battle_id}:{suffix}")
 
 
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(redis_listener())
+    try:
+        await redis_client.config_set("notify-keyspace-events", "Ex")
+    except Exception as exc:
+        logger.warning(
+            f"Could not enable keyspace notifications: {exc}. "
+            "Make sure Redis is configured with notify-keyspace-events=Ex"
+        )
+    asyncio.create_task(idle_battle_listener())
 
 
 @app.on_event("shutdown")

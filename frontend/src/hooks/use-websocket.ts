@@ -1,7 +1,7 @@
 import { useCallback, useRef } from "react";
 import { CONFIG } from "../config";
 import { safeParseJson } from "../lib/api";
-import { tokenStore } from "../lib/token-store"
+import { tokenStore } from "../lib/token-store";
 import type { WsClientMessage, WsServerEvent } from "../types/ws";
 
 type UseWebSocketOptions = {
@@ -47,7 +47,7 @@ export const useWebSocket = (options: UseWebSocketOptions) => {
         return
       }
 
-      const wsUrl = ${CONFIG.WS_URL}/ws/battle/${battleId}?token=${encodeURIComponent(token)};
+      const wsUrl = `${CONFIG.WS_URL}/ws/battle/${battleId}?token=${encodeURIComponent(token)}`;
 
       try {
         const socket = new WebSocket(wsUrl);

@@ -31,6 +31,20 @@ async def notify_django_user_left(battle_id: int, user_id: int):
         except Exception as e:
             print(f"HTTP error (leave): {e}")
 
+async def notify_django_delete_battle(battle_id: int):
+    async with httpx.AsyncClient() as client:
+        try:
+            url = f"{settings.DJANGO_API_URL}/battles/delete/{battle_id}/"
+            headers = {"Authorization": f"Bearer {settings.SECRET_KEY}"}
+
+            response = await client.delete(url, headers=headers)
+            if response.status_code == 204:
+                print(f"Django deleted idle battle {battle_id}")
+            else:
+                print(f"Error deleting battle in Django: {response.text}")
+        except Exception as e:
+            print(f"HTTP error (delete): {e}")
+
 
 async def notify_django_battle_started(battle_id: int, user_id: int) -> dict | None:
     async with httpx.AsyncClient() as client:

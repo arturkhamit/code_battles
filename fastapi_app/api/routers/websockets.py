@@ -30,7 +30,7 @@ async def watch_battle_timeout(battle_id: int, deadline: float):
     if not is_finished:
         await redis.set(f"battle:{battle_id}:finished", "1", ex=3600)
 
-        await manager.broadcast(
+        await manager.publish(
             battle_id,
             {
                 "event": "battle_finished",
@@ -54,7 +54,7 @@ async def battle_websocket(
 
     asyncio.create_task(notify_django_user_joined(battle_id, user_id))
 
-    await manager.broadcast(
+    await manager.publish(
         battle_id,
         {"event": "user_joined", "data": {"user_id": user_id, "username": username}},
     )
@@ -74,7 +74,7 @@ async def battle_websocket(
 
             if action == "start_battle_request":
                 current_deadline = await redis.get(f"battle:{battle_id}:deadline")
-                current_count = len(manager.active_battles.get(battle_id, {}))
+                current_count = manager.local_count(battle_id)
 
                 if not current_deadline and current_count >= 1:
                     start_data = await notify_django_battle_started(battle_id, user_id)
@@ -86,7 +86,7 @@ async def battle_websocket(
                             f"battle:{battle_id}:deadline", new_deadline, ex=86400
                         )
 
-                        await manager.broadcast(
+                        await manager.publish(
                             battle_id,
                             {
                                 "event": "battle_started",
@@ -110,7 +110,7 @@ async def battle_websocket(
                 code = data.get("code", None)
                 task_id = data.get("task_id")
 
-                await manager.broadcast(
+                await manager.publish(
                     battle_id,
                     {
                         "event": "opponent_running_code",
@@ -131,7 +131,7 @@ async def battle_websocket(
 
                 result = await execute_and_test_code(task_data, language, code)
 
-                await manager.send_personal(
+                await manager.publish_personal(
                     battle_id, user_id, {"event": "execution_result", "data": result}
                 )
 
@@ -140,7 +140,7 @@ async def battle_websocket(
 
                     await redis.set(f"battle:{battle_id}:finished", "1", ex=3600)
 
-                    await manager.broadcast(
+                    await manager.publish(
                         battle_id,
                         {
                             "event": "battle_finished",
@@ -162,19 +162,22 @@ async def battle_websocket(
     except WebSocketDisconnect:
         manager.disconnect(battle_id, user_id)
 
-        await manager.broadcast(
+        await manager.publish(
             battle_id,
             {"event": "user_left", "data": {"user_id": user_id, "username": username}},
         )
 
-        participants_count = len(manager.active_battles.get(battle_id, {}))
-        await manager.broadcast(
+        participants_count = manager.local_count(battle_id)
+        await manager.publish(
             battle_id,
             {
                 "event": "lobby_update",
                 "data": {"participants_count": participants_count},
             },
         )
+
+        if not manager.has_local_connections(battle_id):
+            await manager.set_idle_timer(battle_id)
 
         if not is_battle_finished_normally:
             asyncio.create_task(notify_django_user_left(battle_id, user_id))
