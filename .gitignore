@@ -1,3 +1,8 @@
+.env
+.env.*
+!.env.example
+backups/
+.last_good_tag
 backend/.env
 fastapi_app/.env
 frontend/.env
@@ -8,3 +13,12 @@ tester.py
 env/
 backend/tests/tests.json
 logs/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+frontend/dist/
+.idea/
+redis_data/
+backend/staticfiles/
