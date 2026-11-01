@@ -18,9 +18,17 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from config.health import health, ready
+
 urlpatterns = [
+    path("health", health),
+    path("ready", ready),
     path("admin/", admin.site.urls),
-    path("api/internal/accounts/", include("apps.accounts.urls")),
-    path("api/internal/battles/", include("apps.battles.urls")),
-    path("api/internal/tasks/", include("apps.tasks.urls")),
+    # public: JWT or AllowAny
+    path("api/accounts/", include("apps.accounts.urls")),
+    path("api/battles/", include("apps.battles.urls")),
+    # internal: FastAPI only, Bearer INTERNAL_API_TOKEN (apps.battles.permissions);
+    # must never be routed from the public entry point
+    path("internal/battles/", include("apps.battles.internal_urls")),
+    path("internal/tasks/", include("apps.tasks.urls")),
 ]

@@ -10,13 +10,54 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR.parent / ".env")
+
+# Everything comes from the process environment: docker/compose in production,
+# backend/.env (loaded by manage.py) in development. See backend/.env.example.
+_REQUIRED_ENV = (
+    "DJANGO_SECRET_KEY",
+    "JWT_SIGNING_KEY",
+    "INTERNAL_API_TOKEN",
+    "POSTGRES_DB",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_HOST",
+    "REDIS_URL",
+)
+_missing = [name for name in _REQUIRED_ENV if not os.environ.get(name, "").strip()]
+if _missing:
+    raise ImproperlyConfigured(
+        "Missing required environment variables: "
+        + ", ".join(_missing)
+        + ". See backend/.env.example."
+    )
+
+
+def env_list(name: str) -> list[str]:
+    """Comma separated environment variable -> list without empty items."""
+    return [
+        item.strip() for item in os.environ.get(name, "").split(",") if item.strip()
+    ]
+
+
+SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
+# Key that simplejwt signs and verifies tokens with (SIMPLE_JWT below);
+# FastAPI verifies access tokens with the same value.
+JWT_SIGNING_KEY = os.environ["JWT_SIGNING_KEY"]
+# Bearer token of FastAPI -> Django calls to /internal/* (apps.battles.permissions).
+INTERNAL_API_TOKEN = os.environ["INTERNAL_API_TOKEN"]
+
+DEBUG = False  # local.py turns it on
+
+# "django" is the service name FastAPI/web use to call Django inside docker.
+ALLOWED_HOSTS = [*env_list("ALLOWED_HOSTS"), "localhost", "127.0.0.1", "django"]
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 # Application definition
 
@@ -29,6 +70,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",  # GinIndex on Task.cf_tags
     # third-party:
     "rest_framework",
     "rest_framework_simplejwt",
@@ -42,19 +84,50 @@ INSTALLED_APPS = [
     "apps.submissions",
 ]
 
+# Reverse proxies in front of Django (production: Caddy -> web -> django = 2; compose sets it).
+# DRF throttles clients by IP: with NUM_PROXIES=N it takes the N-th entry from the right of
+# X-Forwarded-For (the part the client could forge is ignored); 0 ignores the header.
+_num_proxies = os.environ.get("NUM_PROXIES", "").strip() or "0"
+if not (_num_proxies.isascii() and _num_proxies.isdigit()):
+    raise ImproperlyConfigured(
+        f"NUM_PROXIES must be a non-negative integer, got {_num_proxies!r}."
+    )
+NUM_PROXIES = int(_num_proxies)
+
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "DEFAULT_PARSER_CLASSES": ("rest_framework.parsers.JSONParser",),
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.AllowAny",),
+    # a view that forgets permission_classes is closed, not open
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
+    # Throttle counters live in the Django cache (Redis), so they are shared by all workers
+    # and survive restarts. Scopes are used by apps.accounts.throttles / apps.battles.throttles.
+    "DEFAULT_THROTTLE_RATES": {
+        "login_ip": "10/min",
+        "login_user": "5/min",
+        "register": "10/hour",
+        "refresh": "30/min",
+        "battle_create": "30/hour",
+        "invite_lookup": "30/min",
+    },
+    "NUM_PROXIES": NUM_PROXIES,
+    "EXCEPTION_HANDLER": "config.exceptions.api_exception_handler",
     "NON_FIELD_ERRORS_KEY": "errors",
+}
+
+SIMPLE_JWT = {
+    "SIGNING_KEY": JWT_SIGNING_KEY,
+    # a refresh token is single-use: /refresh/ returns a new one and blacklists the old one
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -63,12 +136,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+# The SPA keeps JWTs in localStorage and sends them in the Authorization header,
+# so cookies are not used cross-origin: no CORS_ALLOW_CREDENTIALS, no allow-all.
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS")
 
 ROOT_URLCONF = "config.urls"
 
@@ -88,6 +158,33 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+
+# Database
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ["POSTGRES_DB"],
+        "USER": os.environ["POSTGRES_USER"],
+        "PASSWORD": os.environ["POSTGRES_PASSWORD"],
+        "HOST": os.environ["POSTGRES_HOST"],
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        "CONN_MAX_AGE": 60,
+        "CONN_HEALTH_CHECKS": True,
+    }
+}
+
+# Redis: battle events (infrastructure/redis) and the Django cache
+# (DRF throttling counters live there, see REST_FRAMEWORK above).
+
+REDIS_URL = os.environ["REDIS_URL"]
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+    }
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -125,53 +222,40 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+# `manage.py collectstatic` target, served by whitenoise (admin assets).
+STATIC_ROOT = BASE_DIR.parent / "staticfiles"
 
-# Logging
+# Logging: JSON lines to stdout only; docker collects and rotates them.
 
-LOG_DIR = BASE_DIR.parent.parent / "logs"
-LOG_DIR.mkdir(exist_ok=True)
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "verbose": {
-            "format": "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        },
+        "json": {"()": "config.logging_json.JsonFormatter"},
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
-        },
-        "file": {
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": str(LOG_DIR / "django.log"),
-            "maxBytes": 10 * 1024 * 1024,
-            "backupCount": 5,
-            "formatter": "verbose",
-            "encoding": "utf-8",
+            "stream": "ext://sys.stdout",
+            "formatter": "json",
         },
     },
     "root": {
-        "handlers": ["console", "file"],
-        "level": "INFO",
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
             "propagate": False,
         },
-        "django.request": {
-            "handlers": ["console", "file"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "apps": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
+        # runserver access log; replaces Django's colored text handler
+        "django.server": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
             "propagate": False,
         },
     },

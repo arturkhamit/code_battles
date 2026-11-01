@@ -1,29 +1,14 @@
-# export DJANGO_SETTINGS_MODULE=config.settings.local
-# RUN IT IN TERMINAL TO SET PROPER FILE FOR SETTINGS
-# AND CHANGE os.environ.setdefault IN manage.py, asgi.py, wsgi.py
+# Local development: put DJANGO_SETTINGS_MODULE=config.settings.local into backend/.env
+# (manage.py loads that file before choosing the settings module).
+# Without it manage.py / wsgi.py / asgi.py use config.settings.production.
 
 import os
 
-from .base import *
+# Non-secret dev default. Secrets and POSTGRES_* have no defaults on purpose.
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 
-SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
-
-ALLOWED_HOSTS = ["*"]
+from .base import *  # noqa: E402,F403
 
 DEBUG = True
-
-REDIS_HOST = os.environ["REDIS_HOST"]
-REDIS_PORT = os.environ["REDIS_PORT"]
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ["POSTGRES_DB"],
-        "USER": os.environ["POSTGRES_USER"],
-        "PASSWORD": os.environ["POSTGRES_PASSWORD"],
-        "HOST": os.environ["POSTGRES_HOST"],
-        "PORT": 5432,
-    }
-}
-
-CORS_ALLOW_ALL_ORIGINS = True
+# runserver uses a new thread per connection, so persistent DB connections leak (one per TCP connection).
+DATABASES["default"]["CONN_MAX_AGE"] = 0  # noqa: F405
