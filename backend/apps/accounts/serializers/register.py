@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.accounts.models.services.create_profile import create_profile
@@ -7,6 +9,7 @@ User = get_user_model()
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(max_length=100)
     password1 = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
 
@@ -23,10 +26,6 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"username": "Username has to be less then 20 characters long."}
             )
-        if len(attrs["email"]) < 12:
-            raise serializers.ValidationError(
-                {"email": "Email has to be at least 12 characters long."}
-            )
         if len(attrs["email"]) > 100:
             raise serializers.ValidationError(
                 {"email": "Email has to be less then 100 characters long."}
@@ -41,6 +40,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"password1": "Password has to be less then 256 characters long."}
             )
+        try:
+            # AUTH_PASSWORD_VALIDATORS; the unsaved user lets them compare with username/email
+            validate_password(
+                attrs["password1"],
+                user=User(username=attrs["username"], email=attrs["email"]),
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(
+                {"password1": list(exc.messages)}
+            ) from exc
 
         if User.objects.filter(username=attrs["username"]).exists():
             raise serializers.ValidationError(

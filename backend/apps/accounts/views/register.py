@@ -3,10 +3,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.serializers.register import RegisterSerializer
+from apps.accounts.throttles import RegisterThrottle
 
 
 class RegisterView(APIView):
     permission_classes = (permissions.AllowAny,)
+    throttle_classes = (RegisterThrottle,)
 
     def post(self, request, *args, **kwargs):
         serializer = RegisterSerializer(data=request.data)

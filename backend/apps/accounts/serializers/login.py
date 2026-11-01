@@ -1,5 +1,7 @@
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import update_last_login
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
@@ -11,7 +13,9 @@ class LoginSerializer(serializers.Serializer):
         user = authenticate(username=attrs["username"], password=attrs["password"])
 
         if not user:
-            raise serializers.ValidationError("Invalid credentials")
+            raise AuthenticationFailed("Invalid credentials")  # 401, not 400
+
+        update_last_login(None, user)
 
         refresh = RefreshToken.for_user(user)
 

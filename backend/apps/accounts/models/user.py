@@ -45,7 +45,7 @@ class User(AbstractUser):
     email = models.CharField(max_length=100, unique=True)
 
     account_created = models.DateTimeField(auto_now_add=True)
-    last_login = models.DateTimeField(auto_now=True, blank=True, null=True)
+    last_login = models.DateTimeField(blank=True, null=True)  # set by LoginSerializer
 
     is_active = models.BooleanField(default=True)
     is_superuser = models.BooleanField(default=False)

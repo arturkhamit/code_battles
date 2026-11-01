@@ -8,9 +8,7 @@ class Profile(models.Model):
         on_delete=models.CASCADE,
         related_name="profile",
     )
-    avatar = models.URLField(
-        default="https://gogle.com/svg.png",
-    )
+    avatar = models.URLField(blank=True)
     rating = models.IntegerField(null=True, default=1000)
     preferred_language = models.CharField(null=True, blank=True)
 
