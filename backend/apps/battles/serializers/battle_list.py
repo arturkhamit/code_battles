@@ -7,7 +7,7 @@ from apps.battles.models import Battle
 class BattleListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Battle
-        exclude = ("id", "creator", "invite_code")
+        exclude = ("creator", "invite_code")
 
     def validate(self, attrs):
 

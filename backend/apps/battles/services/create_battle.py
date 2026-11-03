@@ -1,48 +1,48 @@
 import logging
-import secrets
 
-from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from apps.battles.models import Battle
+from config.exceptions import ConflictError
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_TYPES = {Battle.Type.DUEL, Battle.Type.GROUP}
+# Game rules, enforced by BattleCreateSerializer. Duration is in minutes everywhere.
+MIN_DURATION = 5
+MAX_DURATION = 120
+DUEL_PARTICIPANTS = 2
+MIN_GROUP_PARTICIPANTS = 2
+MAX_GROUP_PARTICIPANTS = 10
+
+INVITE_CODE_ATTEMPTS = 5
 
 
-def create_battle(creator, *, ranked, type, duration, task, max_participants):
-
-    if type not in ALLOWED_TYPES:
-        raise ValidationError("Unsupported battle type")
-
-    if duration <= 0 or duration > 60 * 60:
-        raise ValidationError("Invalid duration")
-
-    if not task:
-        raise ValidationError("Task is required")
-
-    if not creator:
-        raise ValidationError("User not found")
-
-    if type == Battle.Type.GROUP and max_participants <= 2:
-        raise ValidationError("Group battles require at least 2 participants")
-    invite_code = secrets.token_urlsafe(4)
-
-    with transaction.atomic():
-        battle = Battle.objects.create(
+def create_battle(
+    creator, *, ranked, type, duration, task, max_participants, is_private
+):
+    for _ in range(INVITE_CODE_ATTEMPTS):
+        battle = Battle(  # invite_code comes from the model default
             creator=creator,
             type=type,
             duration=duration,
             task=task,
             status=Battle.Status.PENDING,
-            invite_code=invite_code,
             ranked=ranked,
             max_participants=max_participants,
+            is_private=is_private,
         )
+        try:
+            with transaction.atomic():  # savepoint: a collision keeps an outer transaction usable
+                battle.save()
+        except IntegrityError:
+            if Battle.objects.filter(invite_code=battle.invite_code).exists():
+                continue  # the code is taken: roll another one
+            raise
 
-    logger.info(
-        "Battle %d created by user %d (type=%s, duration=%s, task=%s)",
-        battle.pk, creator.pk, type, duration, task,
-    )
-    return battle
+        logger.info(
+            "Battle %d created by user %d (type=%s, duration=%s, task=%s, private=%s)",
+            battle.pk, creator.pk, type, duration, task, is_private,
+        )
+        return battle
+
+    raise ConflictError("Could not generate a unique invite code, try again.")

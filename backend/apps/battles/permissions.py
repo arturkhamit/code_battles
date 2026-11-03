@@ -1,3 +1,5 @@
+import hmac
+
 from django.conf import settings
 from rest_framework import permissions
 
@@ -14,4 +16,6 @@ class IsInternalService(permissions.BasePermission):
 
         prefix, token = parts
 
-        return prefix == "Bearer" and token == settings.SECRET_KEY
+        return prefix == "Bearer" and hmac.compare_digest(
+            token.encode(), settings.INTERNAL_API_TOKEN.encode()
+        )
