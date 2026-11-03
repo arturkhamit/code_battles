@@ -11,6 +11,8 @@ class Participant(models.Model):
         WAITING = "waiting"
         PLAYING = "playing"
         FINISHED = "finished"
+        # left a running battle: the row stays so that a reconnect gets the same role back
+        DISCONNECTED = "disconnected"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="participant"
@@ -33,3 +35,8 @@ class Participant(models.Model):
     class Meta:
         verbose_name = "Participant"
         verbose_name_plural = "Participants"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["battle", "user"], name="unique_participant_per_battle"
+            )
+        ]
