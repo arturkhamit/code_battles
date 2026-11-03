@@ -1,8 +1,14 @@
+import logging
+import os
+
 from datasets import Dataset, load_dataset
+
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
+logger = logging.getLogger(__name__)
 
 iterable_ds = load_dataset("deepmind/code_contests", split="train", streaming=True)
 
-print("Downloading")
+logger.info("Downloading")
 
 fields_to_remove = (
     "cf_contest_id",
@@ -24,4 +30,4 @@ mini_ds = Dataset.from_list(records)
 
 mini_ds.to_json("tests.json")
 
-print("Completed")
+logger.info("Completed")
