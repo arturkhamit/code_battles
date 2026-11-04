@@ -1,0 +1,37 @@
+[project]
+name = "code-battles-runner"
+version = "1.0.0"
+description = "Sandbox runner for Code Battles: compiles and judges user code in locked-down containers"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "docker==7.1.0",
+    "fastapi==0.162.0",
+    "pydantic==2.12.5",
+    "pydantic-settings==2.16.2",
+    "uvicorn==0.41.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx==0.28.1",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.4.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "docker: needs a Docker daemon and the sandbox images (deselect with -m 'not docker')",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# asserts and throw-away secrets are what tests are made of
+"tests/*" = ["S101", "S105", "S106", "S108", "S603"]
+# the judge launches the user's program on purpose: that is its whole job
+"sandbox/judge/judge.py" = ["S603"]
