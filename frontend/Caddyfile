@@ -1,0 +1,77 @@
+# Entry point of the project ("web"): SPA + the only routing table between the services.
+# Chain: shared Caddy on the host -> 127.0.0.1:8010 -> this Caddy -> django / fastapi.
+{
+	admin off
+	auto_https off
+	# Who may send X-Forwarded-*: only the docker network gateway, which is where the shared Caddy
+	# (through the published 127.0.0.1 port) comes from. For a trusted peer Caddy keeps
+	# X-Forwarded-Proto/Host and appends the peer to X-Forwarded-For; from anyone else it
+	# overwrites all three. Django counts this hop in NUM_PROXIES.
+	servers {
+		trusted_proxies static {$TRUSTED_PROXIES:172.16.0.0/12 192.168.0.0/16}
+	}
+	log {
+		output stdout
+		format json
+		level WARN
+	}
+}
+
+:8080 {
+	root * /srv
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# no inline scripts allowed; inline styles are (React style={} attributes)
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+
+	@closed path /internal /internal/* /docs /docs/* /redoc /redoc/* /openapi.json
+	handle @closed {
+		respond 404
+	}
+
+	# /admin only through an SSH tunnel: ssh -L 8010:127.0.0.1:8010 <server>, then http://localhost:8010/admin/
+	# From the internet client_ip is the visitor's public IP (the shared Caddy overwrites X-Forwarded-For,
+	# so it cannot be forged); through the tunnel nothing is in front, the client is the docker gateway.
+	@admin_public {
+		path /admin /admin/*
+		not client_ip private_ranges
+	}
+	handle @admin_public {
+		respond 404
+	}
+
+	@django path /api/accounts/* /api/battles/* /admin /admin/* /static/* /health /ready
+	handle @django {
+		reverse_proxy django:8000
+	}
+
+	@fastapi path /api/tasks /api/tasks/* /ws/*
+	handle @fastapi {
+		# WebSocket upgrade works out of the box; no buffering, no idle cut for long battles
+		reverse_proxy fastapi:8000 {
+			flush_interval -1
+			transport http {
+				read_timeout 2h
+			}
+		}
+	}
+
+	# anything else under /api is not ours: a JSON-less 404 instead of the SPA page
+	@unknown path /api/* /ws/*
+	handle @unknown {
+		respond 404
+	}
+
+	handle {
+		header /assets/* Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+}

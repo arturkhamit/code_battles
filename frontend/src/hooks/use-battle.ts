@@ -1,430 +1,301 @@
-import { useCallback, useMemo, useReducer, useRef } from "react";
-import { CONFIG } from "../config";
-import { authFetch } from "../lib/token-store";
+import { useCallback, useEffect, useReducer, useState } from "react"
+import { CONFIG } from "../config"
+import {
+  CLOSE_MESSAGES,
+  describeWsError,
+  getKnownBattle,
+  rememberBattle,
+  resolveInvite,
+} from "../lib/battles"
+import { authFetch } from "../lib/token-store"
+import { verdictStatus } from "../lib/verdict"
 import type {
-  ApiErrorState,
+  BattleFacts,
   BattlePhase,
+  BattleResult,
   BattleState,
-  BattleType,
   Language,
   LogEntry,
   SubmitStatus,
-} from "../types/battle";
-import type { TaskInfo } from "../types/task";
-import type { WsServerEvent } from "../types/ws";
-import { useTimer } from "./use-timer";
-import { useWebSocket } from "./use-websocket";
+} from "../types/battle"
+import type { TaskInfo } from "../types/task"
+import type { WsServerEvent } from "../types/ws"
+import { useTimer } from "./use-timer"
+import { useWebSocket, type WsCloseInfo, type WsTarget } from "./use-websocket"
+
+const MAX_LOGS = 500
 
 type Action =
-  | { type: "SET_PHASE"; phase: BattlePhase }
-  | { type: "SET_BATTLE_ID"; battleId: number | null }
-  | { type: "SET_TASK_ID"; taskId: number }
-  | { type: "SET_BATTLE_TYPE"; battleType: BattleType }
-  | { type: "SET_DURATION"; duration: number }
-  | { type: "SET_MAX_PARTICIPANTS"; maxParticipants: number }
-  | { type: "SET_DEADLINE"; deadline: number | null }
-  | { type: "SET_PARTICIPANTS"; count: number }
-  | { type: "SET_SUBMIT_STATUS"; status: SubmitStatus }
-  | { type: "ADD_LOG"; entry: LogEntry }
-  | { type: "SET_ERROR"; error: ApiErrorState | null }
-  | { type: "RESET" };
-
-const initialState: BattleState = {
-  phase: "idle",
-  battleId: null,
-  taskId: 1,
-  battleType: "1v1",
-  duration: 15,
-  maxParticipants: 2,
-  deadline: null,
-  participantsCount: 0,
-  submitStatus: { kind: "none" },
-  logs: [
-    {
-      timestamp: new Date().toLocaleTimeString(),
-      message: "System is ready...",
-      level: "system",
-    },
-  ],
-  error: null,
-};
+  | { type: "LOG"; entry: LogEntry }
+  | { type: "JOINED"; isSpectator: boolean; isCreator: boolean; count: number; facts: BattleFacts }
+  | { type: "FINISHED"; result: BattleResult }
+  | { type: "PARTICIPANTS"; count: number }
+  | { type: "TASK"; taskId: number }
+  | { type: "PHASE"; phase: BattlePhase }
+  | { type: "SUBMIT"; status: SubmitStatus }
+  | { type: "WS_ERROR"; message: string }
+  | { type: "CLOSED"; code: number; message: string }
+  | { type: "CLEAR_ERROR" }
 
 const reducer = (state: BattleState, action: Action): BattleState => {
   switch (action.type) {
-    case "SET_PHASE":
-      return { ...state, phase: action.phase };
-    case "SET_BATTLE_ID":
-      return { ...state, battleId: action.battleId };
-    case "SET_TASK_ID":
-      return { ...state, taskId: action.taskId };
-    case "SET_BATTLE_TYPE":
-      return { ...state, battleType: action.battleType };
-    case "SET_DURATION":
-      return { ...state, duration: action.duration };
-    case "SET_MAX_PARTICIPANTS":
-      return { ...state, maxParticipants: action.maxParticipants };
-    case "SET_DEADLINE":
-      return { ...state, deadline: action.deadline };
-    case "SET_PARTICIPANTS":
-      return { ...state, participantsCount: action.count };
-    case "SET_SUBMIT_STATUS":
-      return { ...state, submitStatus: action.status };
-    case "ADD_LOG":
-      return { ...state, logs: [...state.logs, action.entry] };
-    case "SET_ERROR":
-      return { ...state, error: action.error };
-    case "RESET":
+    case "LOG":
+      return { ...state, logs: [...state.logs, action.entry].slice(-MAX_LOGS) }
+    case "JOINED":
       return {
-        ...initialState,
-        taskId: state.taskId,
-        battleType: state.battleType,
-        duration: state.duration,
-        maxParticipants: state.maxParticipants,
-        logs: state.logs,
-      };
-    default:
-      return state;
-  }
-};
-
-export const useBattle = (userId: number, username: string) => {
-  const [state, dispatch] = useReducer(reducer, initialState);
-  const [taskInfo, setTaskInfo] = useReducer(
-    (_: TaskInfo | null, next: TaskInfo | null) => next,
-    null,
-  );
-
-  const addLog = useCallback(
-    (message: string, level: LogEntry["level"] = "info") => {
-      dispatch({
-        type: "ADD_LOG",
-        entry: { timestamp: new Date().toLocaleTimeString(), message, level },
-      });
-    },
-    [],
-  );
-
-  const fetchTask = useCallback(
-    async (taskId: number) => {
-      const result = await authFetch<TaskInfo>(
-        `${CONFIG.FASTAPI_URL}/api/tasks/${taskId}/info`,
-      );
-      if (result.ok) {
-        setTaskInfo(result.data);
-      } else {
-        addLog(`Failed to load task: ${result.error.message}`, "error");
-        setTaskInfo(null);
+        ...state,
+        isSpectator: action.isSpectator,
+        isCreator: action.isCreator,
+        participantsCount: action.count,
+        facts: action.facts,
+        phase: state.phase === "connecting" ? "lobby" : state.phase,
       }
-    },
-    [addLog],
-  );
+    case "FINISHED":
+      return { ...state, phase: "finished", result: action.result }
+    case "PARTICIPANTS":
+      return { ...state, participantsCount: action.count }
+    case "TASK":
+      return { ...state, taskId: action.taskId }
+    case "PHASE":
+      return { ...state, phase: action.phase }
+    case "SUBMIT":
+      return { ...state, submitStatus: action.status }
+    case "WS_ERROR":
+      return {
+        ...state,
+        error: { message: action.message },
+        // the error answers the submission in flight
+        submitStatus:
+          state.submitStatus.kind === "running"
+            ? { kind: "error", message: action.message }
+            : state.submitStatus,
+      }
+    case "CLOSED":
+      return {
+        ...state,
+        closed: { code: action.code, message: action.message },
+        phase: state.phase === "finished" ? "finished" : "closed",
+      }
+    case "CLEAR_ERROR":
+      return { ...state, error: null }
+    default:
+      return state
+  }
+}
 
-  const phaseRef = useRef(state.phase);
-  phaseRef.current = state.phase;
+const initState = (battleId: number): BattleState => ({
+  phase: "connecting",
+  taskId: getKnownBattle(battleId).task ?? null,
+  participantsCount: null,
+  isSpectator: false,
+  isCreator: false,
+  submitStatus: { kind: "none" },
+  logs: [],
+  error: null,
+  closed: null,
+  facts: null,
+  result: null,
+})
 
-  const timer = useTimer();
+/** One battle, from mount to unmount: BattlePage remounts it (key) for another battle or role. */
+export const useBattle = (target: WsTarget, userId: number) => {
+  const { battleId } = target
+  const [state, dispatch] = useReducer(reducer, battleId, initState)
+  const [taskInfo, setTaskInfo] = useState<TaskInfo | null>(null)
+  const timer = useTimer()
+  const { start: startTimer, stop: stopTimer } = timer
 
-  const handleWsEvent = useCallback(
+  const addLog = useCallback((message: string, level: LogEntry["level"] = "info") => {
+    dispatch({
+      type: "LOG",
+      entry: { timestamp: new Date().toLocaleTimeString(), message, level },
+    })
+  }, [])
+
+  const handleEvent = useCallback(
     (event: WsServerEvent) => {
       switch (event.event) {
-        case "lobby_update": {
+        case "role_assigned": {
+          const { role, is_creator, players_count, task_id, type } = event.data
+          const spectating = role === "spectator"
           dispatch({
-            type: "SET_PARTICIPANTS",
-            count: event.data.participants_count,
-          });
-          if (
-            "task_id" in event.data &&
-            typeof event.data.task_id === "number"
-          ) {
-            dispatch({ type: "SET_TASK_ID", taskId: event.data.task_id });
-            fetchTask(event.data.task_id);
+            type: "JOINED",
+            isSpectator: spectating,
+            isCreator: is_creator,
+            count: players_count,
+            facts: {
+              type,
+              maxParticipants: event.data.max_participants,
+              creatorName: event.data.creator_username ?? null,
+              durationMinutes: event.data.duration ?? null,
+            },
+          })
+          if (typeof task_id === "number") {
+            dispatch({ type: "TASK", taskId: task_id })
+            rememberBattle(battleId, { task: task_id, type })
           }
-          break;
+          addLog(spectating ? "You joined as a spectator (watch only)." : "You joined as a player.", "system")
+          break
+        }
+        case "lobby_update": {
+          dispatch({ type: "PARTICIPANTS", count: event.data.participants_count })
+          if (typeof event.data.task_id === "number") {
+            dispatch({ type: "TASK", taskId: event.data.task_id })
+            rememberBattle(battleId, { task: event.data.task_id })
+          }
+          break
         }
         case "battle_started": {
-          addLog("Battle STARTED! Good luck!", "success");
-          dispatch({ type: "SET_PHASE", phase: "active" });
-          dispatch({ type: "SET_DEADLINE", deadline: event.data.deadline });
-          timer.start(event.data.deadline);
-          break;
+          dispatch({ type: "PHASE", phase: "active" })
+          startTimer(event.data.remaining_seconds)
+          addLog("Battle is running. Good luck!", "success")
+          break
         }
         case "battle_finished": {
-          timer.stop();
-          dispatch({ type: "SET_PHASE", phase: "finished" });
-
-          if (event.data.reason === "time_up") {
-            addLog("Time is up! No winner.", "error");
-            dispatch({
-              type: "SET_SUBMIT_STATUS",
-              status: { kind: "error", message: "TIME IS UP! NO WINNER." },
-            });
+          stopTimer()
+          const { winner_id, winner_username, reason } = event.data
+          dispatch({ type: "FINISHED", result: { winnerId: winner_id, winnerName: winner_username, reason } })
+          let message: string
+          if (winner_id === null) {
+            message = reason === "time_up" ? "Time is up: a draw." : "Battle finished: a draw."
+          } else if (winner_id === userId) {
+            message = "You won!"
           } else {
-            addLog(
-              `Battle finished! Winner: User ${event.data.winner_username}:${event.data.winner_id}`,
-              "success",
-            );
-            dispatch({
-              type: "SET_SUBMIT_STATUS",
-              status: { kind: "accepted", message: "BATTLE FINISHED!" },
-            });
+            message = `Winner: ${winner_username ?? `user ${winner_id}`}`
           }
-          break;
+          addLog(`Battle finished. ${message}`, winner_id === userId ? "success" : "system")
+          dispatch({
+            type: "SUBMIT",
+            status: winner_id === userId ? { kind: "accepted", message } : { kind: "error", message },
+          })
+          break
         }
         case "execution_result": {
-          if (event.data.is_correct) {
-            dispatch({
-              type: "SET_SUBMIT_STATUS",
-              status: {
-                kind: "accepted",
-                message: "ACCEPTED (All test cases passed)",
-              },
-            });
-            addLog("All test cases passed!", "success");
-          } else {
-            dispatch({
-              type: "SET_SUBMIT_STATUS",
-              status: { kind: "wrong", message: event.data.message },
-            });
-            addLog(
-              `Tests failed: ${event.data.message}\n${event.data.details}`,
-              "error",
-            );
-          }
-          break;
+          const status = verdictStatus(event.data)
+          dispatch({ type: "SUBMIT", status })
+          if (status.kind === "accepted") addLog("All tests passed!", "success")
+          else if (status.kind === "wrong") addLog(`Your submission: ${status.message}.`, "error")
+          break
         }
         case "opponent_running_code": {
-          addLog(
-            `User ${event.data.username}:${event.data.user_id} is running code...`,
-            "system",
-          );
-          break;
+          if (event.data.user_id !== userId) {
+            addLog(`Opponent ${event.data.username} is running code...`, "system")
+          }
+          break
         }
         case "user_joined": {
-          addLog(
-            `User ${event.data.username}:${event.data.user_id} joined!`,
-            "system",
-          );
-          break;
+          if (event.data.user_id !== userId) {
+            addLog(`${event.data.username} joined as ${event.data.role}.`, "system")
+          }
+          break
         }
         case "user_left": {
-          addLog(
-            `User ${event.data.username}:${event.data.user_id} left.`,
-            "error",
-          );
-          break;
+          if (event.data.user_id !== userId) {
+            addLog(`${event.data.username} left.`, "info")
+          }
+          break
         }
         case "chat_message": {
           addLog(`${event.data.username}: ${event.data.message}`, "chat")
           break
         }
         case "error": {
-          addLog(`Server error: ${event.data.message}`, "error");
-          dispatch({
-            type: "SET_ERROR",
-            error: { message: event.data.message },
-          });
-          break;
+          const message = describeWsError(event.data.code, event.data.message, event.data.retry_after)
+          dispatch({ type: "WS_ERROR", message })
+          addLog(message, "error")
+          break
         }
-        default: {
-          addLog(
-            `Unknown event: ${(event as { event: string }).event}`,
-            "system",
-          );
-        }
+        default:
+          console.debug("Ignoring unknown WS event", event)
       }
     },
-    [addLog, timer, fetchTask],
-  );
-
-  const ws = useWebSocket({
-    onEvent: handleWsEvent,
-    onOpen: () => {
-      addLog("Connected! Waiting in lobby...", "success");
-    },
-    onClose: (wasClean) => {
-      if (wasClean || phaseRef.current === "finished") {
-        addLog("Connection closed.", "info");
-      } else {
-        addLog("Connection lost unexpectedly.", "error");
-      }
-      if (phaseRef.current !== "active" && phaseRef.current !== "finished") {
-        dispatch({ type: "SET_PHASE", phase: "idle" });
-      }
-    },
-    onError: (message) => {
-      addLog(message, "error");
-    },
-    shouldReconnect: () => phaseRef.current === "active",
-  });
-
-  const handleCreate = useCallback(async () => {
-    dispatch({ type: "SET_ERROR", error: null });
-
-    ws.disconnect();
-    dispatch({ type: "RESET" });
-    dispatch({ type: "SET_ERROR", error: null });
-
-    const errors: Record<string, string[]> = {};
-    if (!state.taskId || state.taskId <= 0) {
-      errors.task = ["Task ID must be a positive number"];
-    }
-    if (!state.duration || state.duration <= 0) {
-      errors.duration = ["Duration must be a positive number"];
-    }
-
-    if (Object.keys(errors).length > 0) {
-      dispatch({
-        type: "SET_ERROR",
-        error: {
-          message: Object.values(errors).flat().join("; "),
-          fieldErrors: errors,
-        },
-      });
-      return;
-    }
-
-    dispatch({ type: "SET_PHASE", phase: "creating" });
-    addLog("Requesting server to create a new battle...", "system");
-
-    const payload = {
-      task: state.taskId,
-      type: state.battleType,
-      ranked: false,
-      duration: state.duration,
-      max_participants: state.battleType === "1v1" ? 2 : state.maxParticipants,
-    };
-
-    const result = await authFetch<{ id?: number; battle_id?: number }>(
-      `${CONFIG.DJANGO_URL}/api/internal/battles/create/`,
-      {
-        method: "POST",
-        body: JSON.stringify(payload),
-      },
-    );
-
-    if (!result.ok) {
-      dispatch({ type: "SET_PHASE", phase: "idle" });
-      dispatch({ type: "SET_ERROR", error: result.error });
-      addLog(`Failed to create battle: ${result.error.message}`, "error");
-      return;
-    }
-
-    const battleId = result.data.id ?? result.data.battle_id;
-    if (!battleId) {
-      dispatch({ type: "SET_PHASE", phase: "idle" });
-      dispatch({
-        type: "SET_ERROR",
-        error: {
-          message: "Server returned success but no battle ID",
-          status: 200,
-          isHtml: false,
-        },
-      });
-      return;
-    }
-
-    addLog(`Battle created! ID: ${battleId}`, "success");
-    dispatch({ type: "SET_BATTLE_ID", battleId });
-    dispatch({ type: "SET_PHASE", phase: "lobby" });
-
-    ws.connect(battleId, userId, username);
-    fetchTask(state.taskId);
-  }, [
-    userId,
-    username,
-    state.taskId,
-    state.duration,
-    state.battleType,
-    addLog,
-    ws,
-    fetchTask,
-  ]);
-
-  const handleJoin = useCallback(() => {
-    dispatch({ type: "SET_ERROR", error: null });
-
-    const errors: Record<string, string[]> = {};
-    if (!state.battleId || state.battleId <= 0) {
-      errors.battle_id = ["Please enter a valid Battle ID"];
-    }
-
-    if (Object.keys(errors).length > 0) {
-      dispatch({
-        type: "SET_ERROR",
-        error: {
-          message: Object.values(errors).flat().join("; "),
-          fieldErrors: errors,
-        },
-      });
-      return;
-    }
-
-    dispatch({ type: "SET_PHASE", phase: "lobby" });
-    addLog(`Joining battle ${state.battleId}...`, "system");
-    ws.connect(state.battleId!, userId, username);
-  }, [state.battleId, userId, username, addLog, ws]);
-
-  const handleStartBattle = useCallback(() => {
-    if (phaseRef.current !== "lobby") return;
-    addLog("Requesting server to start the battle...", "system");
-    ws.send({ action: "start_battle_request" });
-  }, [addLog, ws]);
-
-  const handleSubmitCode = useCallback(
-    (code: string, language: Language) => {
-      if (phaseRef.current !== "active") return;
-      dispatch({ type: "SET_SUBMIT_STATUS", status: { kind: "running" } });
-      addLog("Code submitted...", "system");
-      ws.send({
-        action: "submit_code",
-        language,
-        code,
-        task_id: state.taskId,
-      });
-    },
-    [addLog, ws, state.taskId],
-  );
-
-  const handleSendChat = useCallback(
-    (message: string) => {
-      const phase = phaseRef.current
-      if (phase !== "lobby" && phase !== "active") return
-      const trimmed = message.trim()
-      if (!trimmed) return
-      ws.send({ action: "send_chat", message: trimmed })
-    },
-    [ws],
+    [addLog, startTimer, stopTimer, userId, battleId],
   )
 
-  const handleDisconnect = useCallback(() => {
-    ws.disconnect();
-    timer.reset();
-    dispatch({ type: "RESET" });
-    addLog("Disconnected.", "info");
-  }, [ws, timer, addLog]);
+  const handleClose = useCallback(
+    ({ code, retryIn }: WsCloseInfo) => {
+      if (retryIn !== null) {
+        addLog(`Connection lost. Reconnecting in ${Math.round(retryIn / 1000)} s...`, "error")
+        return
+      }
+      stopTimer()
+      const message =
+        CLOSE_MESSAGES[code] ??
+        (code === 1011
+          ? "The game service is unavailable. Reload the page later."
+          : "Disconnected from the battle. Reload the page to reconnect.")
+      dispatch({ type: "CLOSED", code, message })
+      addLog(message, "error")
+    },
+    [addLog, stopTimer],
+  )
 
-  const clearError = useCallback(() => {
-    dispatch({ type: "SET_ERROR", error: null });
-  }, []);
+  const { connect, disconnect, send } = useWebSocket({ onEvent: handleEvent, onClose: handleClose })
+  const { role, invite } = target
 
-  const canShowStartButton = useMemo(() => {
-    if (state.phase !== "lobby") return false
-    if (state.battleType === "1v1") return state.participantsCount >= 1
-    return state.participantsCount >= 2
-  }, [state.phase, state.battleType, state.participantsCount]);
+  useEffect(() => {
+    connect({ battleId, role, invite })
+    return disconnect
+  }, [connect, disconnect, battleId, role, invite])
 
-  return {
-    state,
-    taskInfo,
-    timer,
-    canShowStartButton,
-    dispatch,
-    handleCreate,
-    handleJoin,
-    handleStartBattle,
-    handleSubmitCode,
-    handleSendChat,
-    handleDisconnect,
-    clearError,
-  };
-};
+  // Only a head start: role_assigned names the task anyway, the invite code just knows it sooner.
+  useEffect(() => {
+    if (!invite || getKnownBattle(battleId).task) return
+    let cancelled = false
+    resolveInvite(invite).then((result) => {
+      if (cancelled || !result.ok || result.data.id !== battleId) return
+      dispatch({ type: "TASK", taskId: result.data.task.id })
+      rememberBattle(battleId, { task: result.data.task.id, type: result.data.type })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [battleId, invite])
+
+  useEffect(() => {
+    if (state.taskId === null) return
+    let cancelled = false
+    authFetch<TaskInfo>(`${CONFIG.FASTAPI_URL}/api/tasks/${state.taskId}/info`).then((result) => {
+      if (cancelled) return
+      if (result.ok) setTaskInfo(result.data)
+      else addLog(`Failed to load the task: ${result.error.message}`, "error")
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [state.taskId, addLog])
+
+  const handleStart = useCallback(() => {
+    if (send({ action: "start_battle_request" })) {
+      addLog("Asking the server to start the battle...", "system")
+    } else {
+      addLog("Not connected to the battle.", "error")
+    }
+  }, [send, addLog])
+
+  const handleSubmit = useCallback(
+    (code: string, language: Language) => {
+      if (send({ action: "submit_code", language, code })) {
+        dispatch({ type: "SUBMIT", status: { kind: "running" } })
+        addLog("Code submitted...", "system")
+      } else {
+        dispatch({ type: "SUBMIT", status: { kind: "error", message: "Not connected: code not sent." } })
+      }
+    },
+    [send, addLog],
+  )
+
+  const handleChat = useCallback(
+    (message: string) => {
+      const trimmed = message.trim()
+      if (trimmed && !send({ action: "send_chat", message: trimmed })) {
+        addLog("Not connected: message not sent.", "error")
+      }
+    },
+    [send, addLog],
+  )
+
+  const clearError = useCallback(() => dispatch({ type: "CLEAR_ERROR" }), [])
+
+  return { state, taskInfo, timer, handleStart, handleSubmit, handleChat, clearError }
+}

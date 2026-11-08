@@ -1,127 +1,192 @@
-import { useState, useCallback, type FormEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
+import { btn } from "../lib/ui"
 import type { BattlePhase, Language, SubmitStatus } from "../types/battle"
+import { Icon } from "./ui/Icon"
 
 type CodePanelProps = {
   phase: BattlePhase
+  isSpectator: boolean
   submitStatus: SubmitStatus
   onSubmit: (code: string, language: Language) => void
+  disabled?: boolean
+  /** why submitting is off, said under the button (a cooldown, no task yet) */
+  disabledReason?: string
+  /** localStorage key of the draft; the panel remembers the code per task */
+  draftKey?: string
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>
 }
 
-const statusBannerClass = (status: SubmitStatus): string => {
-  const base =
-    "rounded border p-2.5 text-center text-sm font-bold"
-  switch (status.kind) {
-    case "none":
-      return `${base} border-ctp-surface1 bg-ctp-mantle text-ctp-text`
-    case "running":
-      return `${base} border-ctp-yellow bg-ctp-yellow/10 text-ctp-yellow`
-    case "accepted":
-      return `${base} border-ctp-green bg-ctp-green/10 text-ctp-green`
-    case "wrong":
-    case "error":
-      return `${base} border-ctp-red bg-ctp-red/10 text-ctp-red`
+const INDENT = "    "
+const LANG_KEY = "cb_language"
+
+const read = (key: string) => {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+const write = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // storage blocked: drafts are a convenience only
   }
 }
 
-const statusText = (status: SubmitStatus): string => {
-  switch (status.kind) {
-    case "none":
-      return "Status: no submissions"
-    case "running":
-      return "Code is running..."
-    case "accepted":
-      return status.message
-    case "wrong":
-      return `WRONG ANSWER: ${status.message}`
-    case "error":
-      return status.message
+const VerdictPanel = ({ status, isSpectator, idleText }: { status: SubmitStatus; isSpectator: boolean; idleText: string }) => {
+  let tone = "border-input-border text-sub"
+  let body: ReactNode = isSpectator ? "Spectating: you can watch, not submit." : idleText
+  if (!isSpectator && status.kind === "running") {
+    tone = "border-yellow/50 bg-yellow/5 text-yellow"
+    body = "Running your code on the tests…"
+  } else if (!isSpectator && status.kind === "accepted") {
+    tone = "border-main/60 bg-main/10 text-main"
+    body = (
+      <>
+        <span className="font-semibold">{status.message}</span>
+        {status.detail && <span className="mt-0.5 block text-xs text-sub">{status.detail}</span>}
+      </>
+    )
+  } else if (!isSpectator && status.kind === "wrong") {
+    tone = "border-error/60 bg-error/10 text-error"
+    body = (
+      <>
+        <span className="font-semibold">{status.message}</span>
+        {status.stats && <span className="mt-0.5 block text-xs text-sub">{status.stats}</span>}
+        {status.detail && (
+          <pre className="mt-2 max-h-40 overflow-auto rounded bg-bg p-2 font-mono text-xs whitespace-pre-wrap text-text">
+            {status.detail}
+          </pre>
+        )}
+      </>
+    )
+  } else if (!isSpectator && status.kind === "error") {
+    tone = "border-error/60 bg-error/10 text-error"
+    body = <span className="whitespace-pre-wrap">{status.message}</span>
   }
-}
-
-export const CodePanel = ({ phase, submitStatus, onSubmit }: CodePanelProps) => {
-  const [code, setCode] = useState("")
-  const [language, setLanguage] = useState<Language>("python")
-
-  const canEdit = phase === "active"
-  const canSubmit = phase === "active" && submitStatus.kind !== "running"
-
-  const handleSubmit = useCallback(
-    (e: FormEvent) => {
-      e.preventDefault()
-      if (!canSubmit || !code.trim()) return
-      onSubmit(code, language)
-    },
-    [canSubmit, code, language, onSubmit],
+  return (
+    <div role="status" className={`rounded-lg border px-3 py-2 text-sm ${tone}`}>
+      {body}
+    </div>
   )
+}
 
-  const handleLoadBadCode = useCallback(() => {
-    setCode("print('no')")
-  }, [])
+export const CodePanel = ({
+  phase,
+  isSpectator,
+  submitStatus,
+  onSubmit,
+  disabled = false,
+  disabledReason,
+  draftKey,
+  textareaRef,
+}: CodePanelProps) => {
+  const [code, setCode] = useState(() => (draftKey ? read(draftKey) ?? "" : ""))
+  const [language, setLanguage] = useState<Language>(() => (read(LANG_KEY) === "cpp" ? "cpp" : "python"))
+  const tabMovesFocus = useRef(false)
 
-  const handleLoadGoodCode = useCallback(() => {
-    setCode("print('yes')")
-  }, [])
+  useEffect(() => {
+    if (!draftKey) return
+    const t = setTimeout(() => write(draftKey, code), 400)
+    return () => clearTimeout(t)
+  }, [code, draftKey])
+
+  const canEdit = phase === "active" && !isSpectator
+  const running = submitStatus.kind === "running"
+  const canSubmit = canEdit && !disabled && !running && code.trim() !== ""
+
+  const submit = useCallback(() => {
+    if (canSubmit) onSubmit(code, language)
+  }, [canSubmit, code, language, onSubmit])
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    submit()
+  }
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = e.currentTarget
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault()
+      submit()
+      return
+    }
+    if (e.key === "Escape") {
+      tabMovesFocus.current = true // Esc, then Tab leaves the editor (no keyboard trap)
+      return
+    }
+    if (e.key !== "Tab" || tabMovesFocus.current || e.altKey || e.ctrlKey || e.metaKey) {
+      tabMovesFocus.current = false
+      return
+    }
+    e.preventDefault()
+    const { selectionStart: start, selectionEnd: end, value } = el
+    if (e.shiftKey) {
+      const lineStart = value.lastIndexOf("\n", start - 1) + 1
+      const spaces = value.slice(lineStart, lineStart + INDENT.length).match(/^ */)?.[0].length ?? 0
+      if (!spaces) return
+      el.setSelectionRange(lineStart, lineStart + spaces)
+      if (!document.execCommand("delete")) el.setRangeText("", lineStart, lineStart + spaces, "end")
+      el.setSelectionRange(Math.max(lineStart, start - spaces), Math.max(lineStart, end - spaces))
+    } else if (!document.execCommand("insertText", false, INDENT)) {
+      el.setRangeText(INDENT, start, end, "end") // execCommand keeps undo; this is the fallback
+    }
+    setCode(el.value)
+  }
 
   return (
-    <section
-      className="flex flex-[1.2] flex-col overflow-y-auto rounded-xl bg-ctp-surface0 p-4 shadow-lg"
-      aria-label="Code editor panel"
-    >
-      <div className={statusBannerClass(submitStatus)} role="status">
-        {statusText(submitStatus)}
-      </div>
-
-      <form onSubmit={handleSubmit} className="mt-3 flex flex-1 flex-col gap-3">
-        <div className="flex items-center justify-between">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-3" aria-label="Code editor panel">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-sm text-sub">
+          Language
           <select
             value={language}
-            onChange={(e) => setLanguage(e.target.value as Language)}
-            className="rounded border border-ctp-surface1 bg-ctp-crust px-2 py-1.5 text-sm text-ctp-text outline-none focus:border-ctp-blue"
-            aria-label="Programming language"
+            onChange={(e) => {
+              const next = e.target.value as Language
+              setLanguage(next)
+              write(LANG_KEY, next)
+            }}
+            className="min-h-9 rounded-lg border border-input-border bg-input-bg px-2 text-sm text-text hover:border-sub focus:border-accent focus:outline-none"
           >
             <option value="python">Python 3</option>
-            <option value="cpp">C++</option>
+            <option value="cpp">C++17</option>
           </select>
+        </label>
+        <span className="hidden text-xs text-sub pointer-fine:inline">
+          Tab indents · Esc, Tab leaves · Ctrl+Enter submits
+        </span>
+      </div>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleLoadBadCode}
-              className="rounded bg-ctp-surface1 px-2 py-1 text-xs text-ctp-text transition hover:bg-ctp-surface2"
-              tabIndex={0}
-            >
-              Bad code
-            </button>
-            <button
-              type="button"
-              onClick={handleLoadGoodCode}
-              className="rounded bg-ctp-surface1 px-2 py-1 text-xs text-ctp-text transition hover:bg-ctp-surface2"
-              tabIndex={0}
-            >
-              Good code
-            </button>
-          </div>
-        </div>
+      <textarea
+        ref={textareaRef}
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={!canEdit}
+        placeholder={language === "python" ? "# read input(), print the answer" : "// read stdin, print the answer"}
+        spellCheck={false}
+        autoCapitalize="off"
+        autoCorrect="off"
+        autoComplete="off"
+        wrap="off"
+        className="min-h-72 flex-1 resize-y rounded-lg border border-input-border bg-bg p-3 font-mono text-sm leading-6 text-text [tab-size:4] placeholder:text-sub focus:border-accent focus:outline-none disabled:opacity-60"
+        aria-label="Code editor"
+      />
 
-        <textarea
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          disabled={!canEdit}
-          placeholder="# Your code..."
-          className="flex-1 resize-none rounded border border-ctp-surface1 bg-ctp-crust p-3 font-mono text-sm text-ctp-green outline-none transition focus:border-ctp-blue disabled:opacity-50"
-          aria-label="Code editor"
-        />
+      <VerdictPanel
+        status={submitStatus}
+        isSpectator={isSpectator}
+        idleText={canEdit ? "No submission yet." : phase === "lobby" ? "The editor opens when the battle starts." : "Editing is closed."}
+      />
 
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          className="rounded bg-ctp-green py-2.5 text-base font-bold text-ctp-crust transition hover:bg-ctp-teal disabled:cursor-not-allowed disabled:bg-ctp-surface1 disabled:text-ctp-subtext0"
-          tabIndex={0}
-          aria-label="Submit code"
-        >
-          Send code
+      <div className="flex flex-col gap-1">
+        <button type="submit" disabled={!canSubmit} className={btn.primary} aria-label="Submit code">
+          <Icon name="play" />
+          {running ? "Running…" : "Submit"}
         </button>
-      </form>
-    </section>
+        {canEdit && disabledReason && <p className="text-center text-xs text-sub">{disabledReason}</p>}
+      </div>
+    </form>
   )
 }

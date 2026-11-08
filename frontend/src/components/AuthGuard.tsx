@@ -1,50 +1,25 @@
-import type { ReactNode } from "react"
-import { useAuth } from "../hooks/use-auth"
-import { AuthForm } from "./AuthForm"
+import { Navigate, Outlet, useLocation } from "react-router-dom"
+import { useAuthContext } from "../hooks/auth-context"
 
-type AuthGuardProps = {
-  children: (props: {
-    userId: number
-    username: string
-    onLogout: () => void
-  }) => ReactNode
-}
-
-export const AuthGuard = ({ children }: AuthGuardProps) => {
-  const { auth, error, login, register, logout, clearError } = useAuth()
+export const AuthGuard = () => {
+  const { auth } = useAuthContext()
+  const location = useLocation()
 
   if (auth.status === "loading") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-ctp-base">
+      <div className="flex min-h-dvh items-center justify-center bg-bg" aria-busy="true">
         <div className="text-center">
-          <div className="mb-2 text-lg font-semibold text-ctp-blue">
-            Code Battle Arena
-          </div>
-          <p className="text-sm text-ctp-subtext0">Loading session...</p>
+          <div className="mb-2 font-mono text-lg font-bold text-text">codebattles</div>
+          <p className="text-sm text-sub">Loading your session…</p>
         </div>
       </div>
     )
   }
 
   if (auth.status === "anonymous") {
-    return (
-      <AuthForm
-        isLoading={false}
-        error={error}
-        onLogin={login}
-        onRegister={register}
-        onClearError={clearError}
-      />
-    )
+    // come back here after signing in (an invite link, a battle, a filtered catalog)
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />
   }
 
-  return (
-    <>
-      {children({
-        userId: auth.user.id,
-        username: auth.user.username,
-        onLogout: logout,
-      })}
-    </>
-  )
+  return <Outlet />
 }

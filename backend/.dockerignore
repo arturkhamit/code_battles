@@ -1,0 +1,22 @@
+.git
+.env
+.env.*
+!.env.example
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.idea
+staticfiles
+# dataset folder (tests.json is ~90 MB) and test code are not part of the image
+tests
+**/test_*.py
+**/tests.py
+conftest.py
+**/conftest.py
+pytest.ini
+TODO
+**/TODO
+Dockerfile
+.dockerignore

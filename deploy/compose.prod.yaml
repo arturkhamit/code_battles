@@ -1,0 +1,33 @@
+# Production override on top of compose.yaml:
+#   docker compose -f compose.yaml -f deploy/compose.prod.yaml ...     (deploy.sh does this)
+# - images are the ones deploy.sh built for $TAG (never pulled, never :dev), so a rollback is
+#   "start the previous tag";
+# - CPU limits for a 6-CPU server shared with other sites (memory limits are in compose.yaml);
+# - no dev ports: compose.yaml publishes only web on 127.0.0.1, nothing is added here.
+services:
+  migrate:
+    image: code-battles-django:${TAG:?set TAG}
+    pull_policy: never
+  django:
+    image: code-battles-django:${TAG:?set TAG}
+    pull_policy: never
+    cpus: 2
+  import-tasks:
+    image: code-battles-django:${TAG:?set TAG}
+    pull_policy: never
+  fastapi:
+    image: code-battles-fastapi:${TAG:?set TAG}
+    pull_policy: never
+    cpus: 1
+  runner:
+    image: code-battles-runner:${TAG:?set TAG}
+    pull_policy: never
+    cpus: 0.5
+  web:
+    image: code-battles-web:${TAG:?set TAG}
+    pull_policy: never
+    cpus: 0.5
+  postgres:
+    cpus: 1.5
+  redis:
+    cpus: 0.5

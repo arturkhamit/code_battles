@@ -33,27 +33,33 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-ctp-base p-8 text-ctp-text">
-          <div className="max-w-md rounded-xl border border-ctp-red bg-ctp-surface0 p-6 text-center shadow-lg">
-            <h2 className="text-xl font-bold text-ctp-red">
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg p-8 text-text">
+          <div className="max-w-md rounded-xl border border-error bg-sub-alt p-6 text-center">
+            <h2 className="text-xl font-bold text-error">
               Something went wrong
             </h2>
-            <p className="mt-2 text-sm text-ctp-subtext0">
+            <p className="mt-2 text-sm text-sub">
               {this.state.errorMessage}
             </p>
-            <p className="mt-3 text-xs text-ctp-overlay0">
-              The application encountered an unexpected error. Your backend
-              services are unaffected.
+            <p className="mt-3 text-xs text-sub">
+              This page hit an error. Your account and battles are safe; reloading usually fixes it.
             </p>
-            <button
-              type="button"
-              onClick={this.handleRetry}
-              className="mt-4 rounded bg-ctp-blue px-4 py-2 text-sm font-bold text-ctp-crust transition hover:bg-ctp-lavender"
-              aria-label="Try again"
-              tabIndex={0}
-            >
-              Try again
-            </button>
+            <div className="mt-4 flex justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="rounded-lg bg-main px-4 py-2 text-sm font-bold text-bg transition hover:bg-main-hover"
+              >
+                Reload the page
+              </button>
+              <button
+                type="button"
+                onClick={this.handleRetry}
+                className="rounded-lg border border-input-border px-4 py-2 text-sm font-medium text-text transition hover:border-sub"
+              >
+                Try again
+              </button>
+            </div>
           </div>
         </div>
       )

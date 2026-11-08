@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
+import { inputClass } from "../lib/ui"
 import type { BattlePhase, LogEntry } from "../types/battle"
+import { Icon } from "./ui/Icon"
 
 type LogPanelProps = {
   logs: LogEntry[]
@@ -8,17 +10,16 @@ type LogPanelProps = {
 }
 
 const logLevelClass: Record<LogEntry["level"], string> = {
-  info: "text-ctp-subtext1",
-  success: "text-ctp-green",
-  error: "text-ctp-red",
-  system: "text-ctp-yellow",
-  chat: "text-ctp-lavender",
+  info: "text-sub",
+  success: "text-main",
+  error: "text-error",
+  system: "text-yellow",
+  chat: "text-accent",
 }
 
 export const LogPanel = ({ logs, phase, onSendChat }: LogPanelProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const [chatInput, setChatInput] = useState("")
-
   const canChat = phase === "lobby" || phase === "active"
 
   useEffect(() => {
@@ -26,67 +27,47 @@ export const LogPanel = ({ logs, phase, onSendChat }: LogPanelProps) => {
     if (el) el.scrollTop = el.scrollHeight
   }, [logs])
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
     const trimmed = chatInput.trim()
     if (!trimmed) return
     onSendChat(trimmed)
     setChatInput("")
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault()
-      handleSubmit()
-    }
-  }
-
   return (
-    <section
-      className="flex flex-[0.8] flex-col overflow-hidden rounded-xl bg-ctp-surface0 p-4 shadow-lg"
-      aria-label="Broadcast log and chat"
-    >
-      <h3 className="mb-2 text-sm font-semibold">Broadcasting</h3>
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-y-auto rounded bg-ctp-crust p-2 font-mono text-xs"
-        role="log"
-        aria-live="polite"
-      >
+    <div className="flex min-h-0 flex-1 flex-col gap-2" aria-label="Battle log and chat">
+      <div ref={containerRef} className="min-h-40 flex-1 overflow-y-auto overscroll-contain rounded-lg bg-bg p-3 font-mono text-xs leading-5" role="log" aria-live="polite">
+        {logs.length === 0 && <p className="text-sub">Events and chat appear here.</p>}
         {logs.map((entry, i) => (
-          <div
-            key={i}
-            className={`${logLevelClass[entry.level]} whitespace-pre-wrap`}
-          >
-            [{entry.timestamp}] {entry.message}
+          <div key={i} className={`${logLevelClass[entry.level]} break-words whitespace-pre-wrap`}>
+            <span className="num text-sub">{entry.timestamp}</span> {entry.message}
           </div>
         ))}
       </div>
 
       {canChat && (
-        <div className="mt-2 flex gap-2">
+        <form onSubmit={handleSubmit} className="flex gap-2">
           <input
             type="text"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            maxLength={500}
-            className="flex-1 rounded border border-ctp-surface1 bg-ctp-crust px-2 py-1.5 text-xs text-ctp-text outline-none transition placeholder:text-ctp-overlay0 focus:border-ctp-lavender"
+            placeholder="Message everyone"
+            maxLength={1000}
+            className={inputClass}
             aria-label="Chat message input"
-            tabIndex={0}
+            enterKeyHint="send"
           />
           <button
-            type="button"
-            onClick={handleSubmit}
+            type="submit"
             disabled={!chatInput.trim()}
-            className="rounded bg-ctp-lavender px-3 py-1.5 text-xs font-bold text-ctp-crust transition hover:bg-ctp-blue disabled:cursor-not-allowed disabled:bg-ctp-surface1 disabled:text-ctp-subtext0"
+            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-input-border bg-input-bg text-sub transition hover:text-text disabled:opacity-40 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
             aria-label="Send chat message"
-            tabIndex={0}
           >
-            Send
+            <Icon name="send" />
           </button>
-        </div>
+        </form>
       )}
-    </section>
+    </div>
   )
 }

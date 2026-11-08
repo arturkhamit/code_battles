@@ -1,0 +1,33 @@
+# Blocks for the shared Caddy (/opt/caddy/Caddyfile). Append them to the END of that file in place
+# (cat deploy/code_battles.caddy >> /opt/caddy/Caddyfile): the container has the file mounted,
+# an editor that replaces the file leaves Caddy on the old content. See deploy/README.md.
+#
+# Caddy gets the TLS certificates itself (ports 80 and 443 must be open, DNS A records of
+# codebattles.online and www.codebattles.online must point at the server) and redirects http -> https.
+# .env on the server: HTTPS=1, ALLOWED_HOSTS=codebattles.online, CSRF_TRUSTED_ORIGINS=https://codebattles.online
+www.codebattles.online {
+	redir https://codebattles.online{uri} permanent
+}
+
+codebattles.online {
+	encode zstd gzip
+
+	# Access log without the query string: the WebSocket token travels in it (?token=...)
+	log {
+		output file /data/code_battles_access.log {
+			roll_size 10MiB
+			roll_keep 3
+		}
+		format filter {
+			request>uri query {
+				delete token
+			}
+			wrap json
+		}
+	}
+
+	# The `web` container of the project listens on the loopback only. This Caddy is not a
+	# trusted proxy of anyone: it replaces X-Forwarded-For/Proto/Host sent by the client with its
+	# own, which is what the project's NUM_PROXIES=2 relies on.
+	reverse_proxy 127.0.0.1:8010
+}

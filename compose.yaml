@@ -1,0 +1,238 @@
+# Code Battles: the whole stack (also the dev stack). Config comes from .env (copy .env.example).
+#
+#   make up                                   start everything
+#   docker compose --profile tools run --rm import-tasks     load backend/tests/tests.json
+#   docker compose --profile build-only build                build the sandbox images (the runner never pulls)
+#
+# Networks: `public` is the only one with a way out and only `web` is on it (port 127.0.0.1:8010).
+# `app` and `sandbox-control` are internal: no internet, no published ports.
+# Production adds deploy/compose.prod.yaml (image tags, CPU limits).
+name: code-battles
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+# A hardened default for our own services (root filesystem is read-only, /tmp is a tmpfs)
+x-hardened: &hardened
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging: *logging
+
+# Django settings that do not depend on the host
+x-django-env: &django-env
+  DJANGO_SETTINGS_MODULE: config.settings.production
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+  # Caddy (host) -> web -> django: two hops. The web proxy appends to X-Forwarded-For.
+  NUM_PROXIES: ${NUM_PROXIES:-2}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-code_battles}
+      POSTGRES_USER: ${POSTGRES_USER:-code_battles}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [app]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    # Ex: expired-key events drive the battle deadlines in FastAPI. AOF: battles survive a restart.
+    command:
+      - sh
+      - -c
+      - exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --notify-keyspace-events Ex --maxmemory 200mb --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    networks: [app]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    # one-shot: applies migrations and exits 0; django waits for it
+    build: ./backend
+    image: code-battles-django:${TAG:-dev}
+    <<: *hardened
+    restart: "no"
+    env_file: ${ENV_FILE:-.env}
+    environment: *django-env
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [app]
+    mem_limit: 512m
+
+  django:
+    image: code-battles-django:${TAG:-dev}
+    <<: *hardened
+    env_file: ${ENV_FILE:-.env}
+    environment: *django-env
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [app]
+    mem_limit: 768m
+    stop_grace_period: 30s
+
+  fastapi:
+    build: ./fastapi_app
+    image: code-battles-fastapi:${TAG:-dev}
+    <<: *hardened
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      ENVIRONMENT: production
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      DJANGO_INTERNAL_URL: http://django:8000/internal
+      RUNNER_URL: http://runner:8000
+    depends_on:
+      redis: {condition: service_healthy}
+      django: {condition: service_healthy}
+      runner: {condition: service_healthy}
+    networks: [app]
+    mem_limit: 384m
+    stop_grace_period: 30s
+
+  runner:
+    # Runs user code in throwaway containers through docker-proxy. Needs the sandbox images
+    # built beforehand (profile build-only): it never pulls.
+    build: ./runner
+    image: code-battles-runner:${TAG:-dev}
+    <<: *hardened
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      ENVIRONMENT: production
+      SANDBOX_DOCKER_URL: tcp://docker-proxy:2375
+      SANDBOX_PYTHON_IMAGE: code-battles-sandbox-python:1
+      SANDBOX_CPP_IMAGE: code-battles-sandbox-cpp:1
+      RUNNER_MAX_CONCURRENCY: ${MAX_CONCURRENT_RUNS:-4}
+    depends_on:
+      docker-proxy: {condition: service_healthy}
+    networks: [app, sandbox-control]
+    mem_limit: 256m
+    stop_grace_period: 90s
+
+  docker-proxy:
+    # The only holder of the docker socket. It filters endpoints, not bodies, so the runner
+    # builds every container spec itself. Same pin as runner/docker-compose.dev.yml.
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      CONTAINERS: "1"
+      POST: "1"
+      IMAGES: "1"
+      PING: "1"
+      EVENTS: "0"
+      VERSION: "0"
+      INFO: "0"
+      EXEC: "0"
+      VOLUMES: "0"
+      NETWORKS: "0"
+      BUILD: "0"
+      COMMIT: "0"
+      AUTH: "0"
+      SECRETS: "0"
+      SERVICES: "0"
+      SWARM: "0"
+      SYSTEM: "0"
+      TASKS: "0"
+      NODES: "0"
+      PLUGINS: "0"
+      CONFIGS: "0"
+      DISTRIBUTION: "0"
+      SESSION: "0"
+      GRPC: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [sandbox-control]
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2375/_ping"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 5s
+
+  web:
+    # The only entry: SPA + routing to django / fastapi (frontend/Caddyfile)
+    build: ./frontend
+    image: code-battles-web:${TAG:-dev}
+    <<: *hardened
+    environment:
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12 192.168.0.0/16}
+    depends_on:
+      django: {condition: service_healthy}
+      fastapi: {condition: service_healthy}
+    ports:
+      - "127.0.0.1:${CODE_BATTLES_PORT:-8010}:8080"
+    networks: [public, app]
+    mem_limit: 128m
+
+  # ---- profile tools: run by hand -------------------------------------------------------
+  import-tasks:
+    image: code-battles-django:${TAG:-dev}
+    profiles: [tools]
+    <<: *hardened
+    restart: "no"
+    env_file: ${ENV_FILE:-.env}
+    environment: *django-env
+    command: ["python", "manage.py", "import_tasks", "/data/tests.json"]
+    volumes:
+      - ./backend/tests/tests.json:/data/tests.json:ro
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    networks: [app]
+    mem_limit: 1g  # a batch with the biggest task peaks at ~550 MB
+
+  # ---- profile build-only: `docker compose --profile build-only build` ---------------------
+  sandbox-python:
+    profiles: [build-only]
+    build:
+      context: ./runner/sandbox
+      dockerfile: python/Dockerfile
+    image: code-battles-sandbox-python:1
+  sandbox-cpp:
+    profiles: [build-only]
+    build:
+      context: ./runner/sandbox
+      dockerfile: cpp/Dockerfile
+    image: code-battles-sandbox-cpp:1
+
+networks:
+  public: {}
+  app:
+    internal: true
+  sandbox-control:
+    internal: true
+
+volumes:
+  pg_data:
+  redis_data:

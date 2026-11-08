@@ -5,6 +5,7 @@ export type ApiError = {
   fieldErrors?: Record<string, string[]>
   status: number
   isHtml: boolean
+  retryAfter?: number
 }
 
 export type ApiResult<T> =
@@ -29,6 +30,8 @@ const formatDrfErrors = (
   const messages: string[] = []
 
   for (const [key, value] of Object.entries(body)) {
+    // FastAPI 429: {detail, code, scope, retry_after}; only detail is for people
+    if (typeof body.detail === "string" && ["code", "scope", "retry_after"].includes(key)) continue
     const errors = Array.isArray(value) ? value.map(String) : [String(value)]
 
     if (key === "non_field_errors" || key === "detail" || key === "errors") {
@@ -62,6 +65,11 @@ export const safeFetch = async <T = unknown>(
     })
 
     const contentType = response.headers.get("content-type") ?? ""
+    const retryHeader = Number(response.headers.get("retry-after"))
+    const retryAfter =
+      response.status === 429
+        ? Number.isFinite(retryHeader) && retryHeader > 0 ? Math.ceil(retryHeader) : 1
+        : undefined
 
     if (contentType.includes("text/html")) {
       const html = await response.text()
@@ -72,6 +80,7 @@ export const safeFetch = async <T = unknown>(
           message: `Server Error (${response.status}): ${extracted}`,
           status: response.status,
           isHtml: true,
+          retryAfter,
         },
       }
     }
@@ -88,7 +97,13 @@ export const safeFetch = async <T = unknown>(
       )
       return {
         ok: false,
-        error: { message, fieldErrors, status: response.status, isHtml: false },
+        error: {
+          message,
+          fieldErrors,
+          status: response.status,
+          isHtml: false,
+          retryAfter,
+        },
       }
     }
 
@@ -100,6 +115,7 @@ export const safeFetch = async <T = unknown>(
           message: `Error (${response.status}): ${text.slice(0, 200)}`,
           status: response.status,
           isHtml: false,
+          retryAfter,
         },
       }
     }
@@ -110,7 +126,7 @@ export const safeFetch = async <T = unknown>(
       return {
         ok: false,
         error: {
-          message: "Request timed out. The server did not respond in time.",
+          message: "The server took too long to answer. Try again in a moment.",
           status: 0,
           isHtml: false,
         },
@@ -120,10 +136,9 @@ export const safeFetch = async <T = unknown>(
     return {
       ok: false,
       error: {
-        message:
-          err instanceof Error
-            ? `Network error: ${err.message}`
-            : "An unexpected network error occurred",
+        message: navigator.onLine === false
+          ? "You are offline. Check your connection and try again."
+          : "Can't reach the server. Check your connection and try again.",
         status: 0,
         isHtml: false,
       },

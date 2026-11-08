@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useReducer } from "react"
+import { useCallback, useEffect, useReducer, useRef } from "react"
 import { CONFIG } from "../config"
 import { safeFetch } from "../lib/api"
-import { tokenStore } from "../lib/token-store"
+import { decodeJwtPayload, getFreshAccess, tokenStore } from "../lib/token-store"
 import type { ApiErrorState } from "../types/battle"
 import type {
   AuthState,
@@ -50,19 +50,6 @@ const reducer = (state: State, action: Action): State => {
   }
 }
 
-const decodeJwtPayload = (token: string): Record<string, unknown> | null => {
-  try {
-    const segment = token.split(".")[1]
-    if (!segment) return null
-    const base64 = segment.replace(/-/g, "+").replace(/_/g, "/")
-    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4)
-    const json = atob(padded)
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
-
 const extractUserFromTokens = (
   tokens: AuthTokens,
   fallbackUsername?: string,
@@ -92,48 +79,31 @@ const extractUserFromTokens = (
 export const useAuth = () => {
   const [state, dispatch] = useReducer(reducer, initialState)
 
-  const refreshTokens = useCallback(async (refreshToken: string) => {
-    const result = await safeFetch<{ access: string }>(
-      `${CONFIG.DJANGO_URL}/api/internal/accounts/refresh/`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh: refreshToken }),
-      },
-    )
-
-    if (!result.ok) {
-      tokenStore.clear()
-      dispatch({ type: "SET_ANONYMOUS" })
-      return
-    }
-
-    const newTokens: AuthTokens = {
-      access: result.data.access,
-      refresh: refreshToken,
-    }
-
-    const storedUsername = tokenStore.getUsername() ?? ""
-    const user = extractUserFromTokens(newTokens, storedUsername)
-
-    if (!user) {
-      tokenStore.clear()
-      dispatch({ type: "SET_ANONYMOUS" })
-      return
-    }
-
-    tokenStore.set(newTokens.access, newTokens.refresh, user.username)
-    dispatch({ type: "SET_AUTHENTICATED", user, tokens: newTokens })
-  }, [])
+  // StrictMode runs effects twice in development: bootstrap once (refresh tokens are single-use).
+  const bootstrapped = useRef(false)
 
   useEffect(() => {
-    const storedRefresh = tokenStore.getRefresh()
-    if (storedRefresh) {
-      refreshTokens(storedRefresh)
-    } else {
+    if (bootstrapped.current) return
+    bootstrapped.current = true
+
+    if (!tokenStore.getRefresh()) {
       dispatch({ type: "SET_ANONYMOUS" })
+      return
     }
-  }, [refreshTokens])
+    // Refreshes only an expired access token. A network error or 5xx keeps the stored session;
+    // a rejected refresh token clears the store.
+    getFreshAccess().then(() => {
+      const access = tokenStore.getAccess()
+      const refresh = tokenStore.getRefresh()
+      const tokens = access && refresh ? { access, refresh } : null
+      const user = tokens && extractUserFromTokens(tokens, tokenStore.getUsername() ?? "")
+      if (tokens && user) {
+        dispatch({ type: "SET_AUTHENTICATED", user, tokens })
+      } else {
+        dispatch({ type: "SET_ANONYMOUS" })
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const handleSessionExpired = () => {
@@ -149,7 +119,7 @@ export const useAuth = () => {
     dispatch({ type: "SET_ERROR", error: null })
 
     const result = await safeFetch<{ access: string; refresh: string }>(
-      `${CONFIG.DJANGO_URL}/api/internal/accounts/login/`,
+      `${CONFIG.DJANGO_URL}/api/accounts/login/`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -175,8 +145,6 @@ export const useAuth = () => {
         type: "SET_ERROR",
         error: {
           message: "Login succeeded but failed to read user info from token",
-          status: 0,
-          isHtml: false,
         },
       })
       return
@@ -195,7 +163,7 @@ export const useAuth = () => {
         id: number
         username: string
         email: string
-      }>(`${CONFIG.DJANGO_URL}/api/internal/accounts/register/`, {
+      }>(`${CONFIG.DJANGO_URL}/api/accounts/register/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -217,7 +185,7 @@ export const useAuth = () => {
 
     const refreshToken = tokenStore.getRefresh()
 
-    await safeFetch(`${CONFIG.DJANGO_URL}/api/internal/accounts/logout/`, {
+    await safeFetch(`${CONFIG.DJANGO_URL}/api/accounts/logout/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh: refreshToken }),

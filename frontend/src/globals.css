@@ -1,26 +1,102 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ctp-base: #1e1e2e;
-  --color-ctp-mantle: #181825;
-  --color-ctp-crust: #11111b;
-  --color-ctp-surface0: #313244;
-  --color-ctp-surface1: #45475a;
-  --color-ctp-surface2: #585b70;
-  --color-ctp-overlay0: #6c7086;
-  --color-ctp-text: #cdd6f4;
-  --color-ctp-subtext0: #a6adc8;
-  --color-ctp-subtext1: #bac2de;
-  --color-ctp-blue: #89b4fa;
-  --color-ctp-lavender: #b4befe;
-  --color-ctp-green: #a6e3a1;
-  --color-ctp-teal: #94e2d5;
-  --color-ctp-yellow: #f9e2af;
-  --color-ctp-peach: #fab387;
-  --color-ctp-red: #f38ba8;
-  --color-ctp-pink: #f5c2e7;
+  --color-bg: #121520;
+  /* secondary text: #8a91ad is 5.3:1 on sub-alt and 5.8:1 on bg (the old #676e8a was 3.5:1) */
+  --color-sub: #8a91ad;
+  --color-sub-alt: #1b1e2c;
+  --color-text: #fff;
+  --color-error: #ef5350;
+  --color-main: #4caf50;
+  --color-main-hover: #66bb6a;
+  --color-card-border: #2a2d3e;
+  --color-input-bg: #1e2233;
+  --color-input-border: #3a3e58;
+  --color-accent: #89b4fa;
+  --color-yellow: #f9e2af;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: local("JetBrains Mono"), local("JetBrainsMono-Regular");
+}
+
+:root {
+  color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  font-family: "Segoe UI", Tahoma, sans-serif;
+  font-family: "Segoe UI", system-ui, Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  text-size-adjust: 100%;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-main) 40%, transparent);
+  color: var(--color-text);
+}
+
+/* one visible focus ring for every control; mouse clicks keep the quiet look */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-offset: 0;
+}
+
+* {
+  scrollbar-color: var(--color-card-border) transparent;
+  scrollbar-width: thin;
+}
+
+/* numbers that update or line up: ids, ratings, counters, the timer */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* iOS zooms into any field under 16px: keep fields at 16px on touch screens */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* controls answer on finger-down and never double-tap-zoom; their labels are not text to select */
+button,
+a,
+select,
+summary,
+[role="button"] {
+  touch-action: manipulation;
+}
+button,
+[role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+button:not(:disabled):active,
+a.inline-flex:active {
+  transform: scale(0.97);
+  transition: transform 100ms ease-out;
+}
+
+dialog::backdrop {
+  background: rgb(5 7 12 / 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse {
+    animation: none;
+  }
 }

@@ -1,0 +1,24 @@
+[project]
+name = "code-battles-fastapi"
+version = "0.1.0"
+description = "Code Battles: FastAPI (REST tasks + WebSocket battles)"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.162.0",
+    "uvicorn>=0.41.0",
+    "websockets>=16.0",  # uvicorn serves /ws through it
+    "httpx>=0.28.1",
+    "redis>=7.3.0",
+    "pyjwt>=2.15.1",
+    "pydantic-settings>=2.16.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1",
+    "ruff>=0.8",
+]
+
+[tool.uv]
+default-groups = ["dev"]
